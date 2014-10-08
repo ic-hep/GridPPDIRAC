@@ -36,7 +36,8 @@ __RCSID__ = "$Id$"
 DIRAC_PILOT = os.path.join( DIRAC.rootPath, 'DIRAC', 'WorkloadManagementSystem', 'PilotAgent', 'dirac-pilot.py' )
 DIRAC_INSTALL = os.path.join( DIRAC.rootPath, 'DIRAC', 'Core', 'scripts', 'dirac-install.py' )
 DIRAC_MODULES = [ os.path.join( DIRAC.rootPath, 'DIRAC', 'WorkloadManagementSystem', 'PilotAgent', 'pilotCommands.py' ),
-                  os.path.join( DIRAC.rootPath, 'DIRAC', 'WorkloadManagementSystem', 'PilotAgent', 'pilotTools.py' ) ]
+                  os.path.join( DIRAC.rootPath, 'GridPPDIRAC', 'WorkloadManagementSystem', 'PilotAgent', 'GridPPCommands.py' ),
+                  os.path.join( DIRAC.rootPath, 'GridPPDIRAC', 'WorkloadManagementSystem', 'PilotAgent', 'pilotTools.py' ) ]
 TRANSIENT_PILOT_STATUS = ['Submitted', 'Waiting', 'Running', 'Scheduled', 'Ready', 'Unknown']
 WAITING_PILOT_STATUS = ['Submitted', 'Waiting', 'Scheduled', 'Ready']
 FINAL_PILOT_STATUS = ['Aborted', 'Failed', 'Done']
