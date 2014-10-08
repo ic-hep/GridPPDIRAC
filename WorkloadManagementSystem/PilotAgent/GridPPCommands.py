@@ -55,6 +55,8 @@ class GitInstallDIRAC(InstallDIRAC):
         self.log.info("successfully deployed DIRAC scripts")
 
         self.installOpts = ['-X']
+        if self.pp.tarballUrl:
+            self.installOpts.append('-u %s' % self.pp.tarballUrl)
         self._locateInstallationScript()
         self._installDIRAC()
         self.log.info("successfully installed externals")

@@ -367,6 +367,9 @@ class PilotParams:
     self.configureScript = 'dirac-configure'
     self.architectureScript = 'dirac-platform'
 
+    #set the tarball url
+    self.tarballUrl = ''
+
     ##settings for git checkout
     self.gitUrl = ''#'git://github.com/ic-hep/DIRAC.git'
     self.gitBranch = None
@@ -465,6 +468,8 @@ class PilotParams:
           self.maxCycles = min( self.MAX_CYCLES, int( v ) )
         except:
           pass
+      elif o in ('-u', '--url'):
+        self.tarballUrl = v
       elif o in ( '-t', '--giturl' ):
         self.gitUrl = v
       elif o in ( '-a', '--gitbranch' ):
