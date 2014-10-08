@@ -28,7 +28,7 @@ class GitInstallDIRAC(InstallDIRAC):
         """
         Standard method for pilot commands
         """
-        url = self.pp.gitURL
+        url = self.pp.gitUrl
         if url in (None, ''):
             InstallDIRAC.execute(self)
             return
