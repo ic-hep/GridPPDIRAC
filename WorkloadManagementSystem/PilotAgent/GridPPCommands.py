@@ -26,37 +26,45 @@ class GitInstallDIRAC(InstallDIRAC):
 
     def execute(self):
         """
-        Standard method for pilot commands
+        Standard method for pilot commands, but with git integration.
         """
-        url = self.pp.gitUrl
-        if url in (None, ''):
+        repos = self.pp.gitRepos
+        if not repos:
             InstallDIRAC.execute(self)
             return
-        branch = self.pp.gitBranch
-        clone_cmd = 'git clone --depth 1 %s' % url
-        if branch is not None:
-            clone_cmd = 'git clone --depth 1 -b %s %s' % (url, branch)
-        deploy_scripts_path = os.path.join(self.pp.rootPath,
-                                           'DIRAC',
-                                           'Core',
-                                           'scripts',
-                                           'dirac-deploy-scripts.py')
+        for url, branch in repos:
+            if branch:
+                clone_cmd = 'git clone --depth 1 -b %s %s' % (branch, url)
+            else:
+                clone_cmd = 'git clone --depth 1 %s' % url
 
-        ret_code, _ = self.executeAndGetOutput(clone_cmd)
-        if ret_code:
-            self.log.error("Could not git clone DIRAC installation")
-            sys.exit(1)
-        self.log.info("successfully cloned DIRAC from git")
+            ret_code, _ = self.executeAndGetOutput(clone_cmd)
+            if ret_code:
+                self.log.error("Failed to git clone DIRAC module '%s'" % url)
+                sys.exit(1)
+        self.log.info("successfully cloned DIRAC modules from git")
 
-        ret_code, _ = self.executeAndGetOutput(deploy_scripts_path)
-        if ret_code:
-            self.log.error("Could not deploy the DIRAC scripts")
-            sys.exit(2)
-        self.log.info("successfully deployed DIRAC scripts")
+        # We can now look at running the install.
+        # Just like the original InstallDIRAC.execture() but add options
+        # if needed...
+        self._setInstallOptions()
 
-        self.installOpts = ['-X']
-        if self.pp.tarballUrl:
-            self.installOpts.append('-u %s' % self.pp.tarballUrl)
+        if os.path.exists("DIRAC"):
+            # We got a DIRAC dir from git
+            # Set "externals only" install
+            self.installOpts.append( '-X' )
+            # Create the scripts directory from the git tree...
+            scripts_cmd = os.path.join("DIRAC",
+                                       "Core",
+                                       "scripts",
+                                       "dirac-deploy-scripts.py")
+            ret_code, _ = self.executeAndGetOutput(scripts_cmd)
+            if ret_code:
+                self.log.error("Failed to deploy DIRAC scripts")
+                sys.exit(1)
+            self.log.info("successfully created DIRAC scripts")
+
+        # Finalise the install
         self._locateInstallationScript()
         self._installDIRAC()
-        self.log.info("successfully installed externals")
+

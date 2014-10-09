@@ -491,6 +491,7 @@ class SiteDirector( AgentModule ):
       # Get the number of available slots on the target site/queue
       totalSlots = self.__getQueueSlots( queue )
       if totalSlots == 0:
+        self.log.debug( '%s: No slots available' % queue )
         continue
 
       pilotsToSubmit = max( 0, min( totalSlots, totalTQJobs - totalWaitingPilots ) )
@@ -631,7 +632,6 @@ class SiteDirector( AgentModule ):
     """
 
     queueDict = self.queueDict[queue]['ParametersDict']
-    self.log.debug("XXX QueueDict: %s" % queueDict)
     pilotOptions = []
 
     setup = gConfig.getValue( "/DIRAC/Setup", "unknown" )

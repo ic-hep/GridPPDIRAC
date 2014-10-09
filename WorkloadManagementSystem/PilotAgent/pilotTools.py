@@ -371,8 +371,8 @@ class PilotParams:
     self.tarballUrl = ''
 
     ##settings for git checkout
-    self.gitUrl = ''#'git://github.com/ic-hep/DIRAC.git'
-    self.gitBranch = None
+    ## A list of (url, branch) tuples
+    self.gitRepos = []
 
     # Pilot command options
     self.cmdOpts = ( ( 'b', 'build', 'Force local compilation' ),
@@ -405,8 +405,7 @@ class PilotParams:
                      ( 'c', 'cert', 'Use server certificate instead of proxy' ),
                      ( 'R:', 'reference=', 'Use this pilot reference' ),
                      ( 'x:', 'execute=', 'Execute instead of JobAgent' ),
-                     ( 't:', 'giturl=', 'git url to clone from' ),
-                     ( 'a:', 'gitbranch=', 'git branch to clone' ),
+                     ( 't:', 'git=', 'git url[@branch] to clone (may be specified multiple times)' ),
                    )
 
     self.__initOptions()
@@ -470,10 +469,13 @@ class PilotParams:
           pass
       elif o in ('-u', '--url'):
         self.tarballUrl = v
-      elif o in ( '-t', '--giturl' ):
-        self.gitUrl = v
-      elif o in ( '-a', '--gitbranch' ):
-        self.gitBranch = v
+      elif o in ( '-t', '--git' ):
+        if "@" in v:
+          url, branch = v.split("@")
+        else:
+          url = v
+          branch = None
+        self.gitRepos.append( (url, branch, ) )
 
     self.rootPath = os.getcwd()
     self.originalRootPath = os.getcwd()
