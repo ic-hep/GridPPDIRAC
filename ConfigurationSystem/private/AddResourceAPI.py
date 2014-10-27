@@ -461,6 +461,8 @@ def updateSEs(vo):
 if __name__ == '__main__':
     import sys
     from optparse import OptionParser
+    from DIRAC.Core.Base import Script
+    Script.parseCommandLine()
     parser = OptionParser()
     parser.add_option("-v", "--vo", dest="vo",
                       default='gridpp', metavar="VO",
