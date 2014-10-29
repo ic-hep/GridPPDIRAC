@@ -71,7 +71,7 @@ def checkUnusedCEs(vo, domain, country_default='xx',
                                       ))
     else:
         gLogger.notice('No new resources available, exiting')
-        return S_OK(ceBdiiDict)  # (siteDict, ceBdiiDict))
+        return S_OK()  # ceBdiiDict)  # (siteDict, ceBdiiDict))
 
     ## now we add them
     sitesAdded = []
@@ -131,14 +131,21 @@ def checkUnusedCEs(vo, domain, country_default='xx',
                                        'the following sites:')
                         for site, diracSite in sitesAdded:
                             gLogger.notice("%s\t%s" % (site, diracSite))
-                    return S_ERROR('Error while executing addSite command')
-                else:
-                    sitesAdded.append((site, diracSite))
+                    gLogger.error('Skipping site %s' % site)
+                    continue
+
+                sitesAdded.append((site, diracSite))
+                result = updateSites(vo, ceBdiiDict)
+                if not result['OK']:
+                    gLogger.error('Problem updating the %s CE info in the CS'
+                                  % diracSite, result['Message'])
+                    continue
+                gLogger.notice('Successfully updated %s CE info in CS' % diracSite)
 
     gLogger.notice('CEs were added at the following sites:')
     for site, diracSite in sitesAdded:
         gLogger.notice("%s\t%s" % (site, diracSite))
-    return S_OK(ceBdiiDict)
+    return S_OK()  # ceBdiiDict)
 
 
 ## this comes from dirac-admin-add-site
@@ -210,69 +217,6 @@ def addSite(diracSiteName, gridSiteName, *ces):
                                % (diracSiteName, ','.join(newCEs)))
     return S_OK()
 
-#def addNewSites(siteDict, domain, country_default='xx'):
-#
-#  sitesAdded = []
-#
-#  for site, ces in siteDict.iteritems():
-#    # Get the country code:
-#    country = ''
-##    ces = siteDict[site].keys()
-#    for ce in ces:
-#      country = ce.strip().split('.')[-1].lower()
-#      if len(country) == 2:
-#        break
-#      if country == 'gov':
-#        country = 'us'
-#        break
-#    if not country or len(country) != 2:
-#      country = country_default
-#    result = getDIRACSiteName(site)
-#    if not result['OK']:
-#      diracSite = "%s.%s.%s" % (domain, site, country)
-#      gLogger.notice('The site %s is not yet in the CS, adding it as %s'
-#                     % (site,  diracSite))
-#      diracSites = [diracSite]
-#    else:
-#      diracSites = result['Value']
-#
-#    if len(diracSites) > 1:
-#      gLogger.notice('Attention! GOC site %s corresponds to more '
-#                     'than one DIRAC sites:' % site)
-#      gLogger.notice(str(diracSites))
-#      gLogger.notice('Please, pay attention which DIRAC site '
-#                     'the new CEs will join\n')
-#
-#    newCEs = {}
-#    addedCEs = []
-#    for ce, ce_info in ces.iteritems():
-#      ceType = ce_info['CEType']
-#      for diracSite in diracSites:
-#        if ce in addedCEs:
-#          continue
-#        gLogger.notice("Adding CE %s of type %s to %s"
-#                       % (ce, ceType, diracSite))
-#        newCEs.setdefault(diracSite, []).append(ce)
-#        addedCEs.append(ce)
-#
-#    for diracSite in diracSites:
-#      if diracSite in newCEs:
-#        result = addSite(diracSite, site, ' '.join(newCEs[diracSite]))
-#        if not result['OK']:
-#          gLogger.error('Error while executing addsite command')
-#          if sitesAdded:
-#            gLogger.notice('CEs were added at the following sites:')
-#            for site, diracSite in sitesAdded:
-#              gLogger.notice("%s\t%s" % (site, diracSite))
-#          return S_ERROR('Error while executing addsite command')
-#        else:
-#          sitesAdded.append((site, diracSite))
-#
-#  gLogger.notice('CEs were added at the following sites:')
-#  for site, diracSite in sitesAdded:
-#    gLogger.notice("%s\t%s" % (site, diracSite))
-#  return S_OK()
-
 
 def updateSites(vo, ceBdiiDict):
     '''
@@ -282,6 +226,18 @@ def updateSites(vo, ceBdiiDict):
     if not result['OK']:
         gLogger.error('Failed to get site updates', result['Message'])
         return S_ERROR('Failed to get site updates')
+    changeSet = result['Value']
+    return updateCS(changeSet)
+
+
+def updateSEs(vo):
+    '''
+    update SEs
+    '''
+    result = getSRMUpdates(vo)
+    if not result['OK']:
+        gLogger.error('Failed to get SRM updates', result['Message'])
+        return S_ERROR('Failed to get SRM updates')
     changeSet = result['Value']
     return updateCS(changeSet)
 
@@ -333,6 +289,7 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
     result = getGridSRMs(vo, unUsed=True)
     if not result['OK']:
         gLogger.error('Failed to look up SRMs in BDII', result['Message'])
+        return S_ERROR('Failed to look up SRMs in BDII')
     siteSRMDict = result['Value']
 
     # Evaluate VOs
@@ -342,13 +299,21 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
     else:
         csVOs = set([vo])
 
-    changeSetFull = set()
+    #changeSetFull = set()
 
-    for site in siteSRMDict:
-        for gridSE in siteSRMDict[site]:
+    csAPI = CSAPI()
+    csAPI.initialize()
+    result = csAPI.downloadCSData()
+    if not result['OK']:
+        gLogger.error('Failed to initialize CSAPI object',
+                      result['Message'])
+        return S_ERROR('Failed to initialize CSAPI object')
+
+    for site, ses in siteSRMDict.iteritems():
+        for gridSE, se_info in ses.iteritems():
             changeSet = set()
-            seDict = siteSRMDict[site][gridSE]['SE']
-            srmDict = siteSRMDict[site][gridSE]['SRM']
+            seDict = se_info['SE']
+            srmDict = se_info['SRM']
             # Check the SRM version
             version = srmDict.get('GlueServiceVersion', '')
             if not (version and version.startswith('2')):
@@ -421,42 +386,37 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
             changeList.sort()
             for entry in changeList:
                 gLogger.notice(entry)
-            changeSetFull = changeSetFull.union(changeSet)
+            #changeSetFull = changeSetFull.union(changeSet)
 
-    if changeSetFull:
-        csAPI = CSAPI()
-        csAPI.initialize()
-        result = csAPI.downloadCSData()
-        if not result['OK']:
-            gLogger.error('Failed to initialize CSAPI object',
-                          result['Message'])
-            return S_ERROR('Failed to initialize CSAPI object')
-        changeList = list(changeSetFull)
-        changeList.sort()
-        for section, option, value in changeList:
-            csAPI.setOption(cfgPath(section, option), value)
-
-        result = csAPI.commit()
-        if not result['OK']:
-            gLogger.error("Error while commit to CS", result['Message'])
-            return S_ERROR("Error while commit to CS")
-
-        gLogger.notice("Successfully committed %d changes to CS"
-                       % len(changeSetFull))
+            #csAPI = CSAPI()
+            #csAPI.initialize()
+            #result = csAPI.downloadCSData()
+            #if not result['OK']:
+            #    gLogger.error('Failed to initialize CSAPI object',
+            #                  result['Message'])
+            #    return S_ERROR('Failed to initialize CSAPI object')
+            #changeList = list(changeSetFull)
+            #changeList.sort()
+            for section, option, value in changeList:
+                csAPI.setOption(cfgPath(section, option), value)
+    
+            result = csAPI.commit()
+            if not result['OK']:
+                gLogger.error("Error while commit %s to CS"
+                              % gridSE, result['Message'])
+                gLogger.error("Skipping...")
+                continue
+            
+            gLogger.notice("Successfully committed %d changes to CS"
+                           % len(changeSet))
+            result = updateSEs(vo)
+            if not result['OK']:
+                gLogger.error('Failed to update %s SE info in CS' % gridSE)
+                continue
+            gLogger.notice('Successfully updated %s SE info in CS' % gridSE)
 
     return S_OK()
 
-
-def updateSEs(vo):
-    '''
-    update SEs
-    '''
-    result = getSRMUpdates(vo)
-    if not result['OK']:
-        gLogger.error('Failed to get SRM updates', result['Message'])
-        return S_ERROR('Failed to get SRM updates')
-    changeSet = result['Value']
-    return updateCS(changeSet)
 
 if __name__ == '__main__':
     import sys
@@ -480,10 +440,10 @@ if __name__ == '__main__':
                       result['Message'])
         sys.exit(1)
 
-    result = updateSites(options.vo, result['Value'])
-    if not result['OK']:
-        gLogger.error("Error while updating sites", result['Message'])
-        sys.exit(1)
+    #result = updateSites(options.vo, result['Value'])
+    #if not result['OK']:
+    #    gLogger.error("Error while updating sites", result['Message'])
+    #    sys.exit(1)
 
     result = checkUnusedSEs(options.vo)
     if not result['OK']:
@@ -491,7 +451,7 @@ if __name__ == '__main__':
                       result['Message'])
         sys.exit(1)
 
-    result = updateSEs(options.vo)
-    if not result['OK']:
-        gLogger.error("Error while updating SEs", result['Message'])
-        sys.exit(1)
+    #result = updateSEs(options.vo)
+    #if not result['OK']:
+    #    gLogger.error("Error while updating SEs", result['Message'])
+    #    sys.exit(1)
