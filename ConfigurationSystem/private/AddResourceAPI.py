@@ -78,9 +78,9 @@ def checkUnusedCEs(vo, domain, country_default='xx',
             # Get the country code:
             if country == country_default:
                 c_tmp = ce.strip().split('.')[-1].lower()
-                if len(country_tmp) == 2:
-                    country = country_tmp
-                if country_tmp == 'gov':
+                if len(c_tmp) == 2:
+                    country = c_tmp
+                if c_tmp == 'gov':
                     country = 'us'
 #    ces = siteDict[site].keys()
 
@@ -105,7 +105,7 @@ def checkUnusedCEs(vo, domain, country_default='xx',
                 continue
             gLogger.notice("Successfully added site %s to the "
                            "CS with name %s and CEs: %s"
-                           % (diracSiteName, gridSiteName, ','.join(ces)))
+                           % (diracSite, site, ','.join(ces)))
         else:  # DIRAC name already in CS, existing site
             diracSites = result['Value']
             if len(diracSites) > 1:
@@ -132,7 +132,7 @@ def checkUnusedCEs(vo, domain, country_default='xx',
                     gLogger.error("Skipping site: %s, DIRAC site: %s..." % (site, diracSite))
                     continue
                 gLogger.notice("Successfully added new CEs to site %s: %s"
-                           % (diracSiteName, ','.join(newCEs)))
+                           % (diracSite, ','.join(ces)))
 
         sitesAdded.append((site, diracSite))
 
