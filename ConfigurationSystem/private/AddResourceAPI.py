@@ -54,168 +54,92 @@ def checkUnusedCEs(vo, domain, country_default='xx',
     ceBdiiDict = result['BdiiInfo']
 
     siteDict = result.get('Value', {})
-    if siteDict:
-        gLogger.notice('New resources available:\n')
-        for site, ces in siteDict.iteritems():
-            diracSite = 'Unknown'
-            result = getDIRACSiteName(site)
-            if result['OK']:
-                diracSite = ','.join(result['Value'])
-            if ces:
-                gLogger.notice("  %s, DIRAC site %s" % (site, diracSite))
-                for ce, ce_info in ces.iteritems():
-                    gLogger.notice(' '*4+ce)
-                    gLogger.notice('      %s, %s'
-                                   % (ce_info['CEType'],
-                                      '%s_%s_%s' % ce_info['System']
-                                      ))
-    else:
+    if not siteDict:
         gLogger.notice('No new resources available, exiting')
         return S_OK()  # ceBdiiDict)  # (siteDict, ceBdiiDict))
-
+    gLogger.notice('New resources available:\n')
+        
+    csAPI = CSAPI()
+    csAPI.initialize()
+    result = csAPI.downloadCSData()
+    if not result['OK']:
+        gLogger.error('Failed to initialize CSAPI object', result['Message'])
+        return S_ERROR('Failed to initialize CSAPI object')
     ## now we add them
-    sitesAdded = []
-
+    sitesAdded = []    
     for site, ces in siteDict.iteritems():
-        # Get the country code:
-        country = ''
+        
+        gLogger.notice("  Site %s:" % site)
+        country = country_default
+        for ce, ce_info in ces.iteritems():
+            gLogger.notice(' '*4+ce)
+            gLogger.notice(' '*6+'%s, %s' % (ce_info['CEType'],
+                                            '%s_%s_%s' % ce_info['System']))
+            # Get the country code:
+            if country == country_default:
+                c_tmp = ce.strip().split('.')[-1].lower()
+                if len(country_tmp) == 2:
+                    country = country_tmp
+                if country_tmp == 'gov':
+                    country = 'us'
 #    ces = siteDict[site].keys()
-        for ce in ces:
-            country = ce.strip().split('.')[-1].lower()
-            if len(country) == 2:
-                break
-            if country == 'gov':
-                country = 'us'
-                break
-        if not country or len(country) != 2:
-            country = country_default
+
+        cfgBase = "/Resources/Sites/%s" % domain
         result = getDIRACSiteName(site)
-        if not result['OK']:
+        if not result['OK']:  # DIRAC name not in CS, new site
             #diracSite = "%s.%s.%s" % (domain, site, country)
             diracSite = diracSiteTemplate.format(domain=domain,
                                                  site=site,
                                                  country=country)
+            cfgBase += '/%s' % diracSite
             gLogger.notice('The site %s is not yet in the CS, adding it as %s'
                            % (site, diracSite))
-            diracSites = [diracSite]
-        else:
+            csAPI.setOption("%s/Name" % cfgBase, site)
+            if ces:
+                gLogger.notice("Adding CEs: %s" % ','.join(ces))
+                csAPI.setOption("%s/CE" % cfgBase, ','.join(ces))
+            result = csAPI.commitChanges()
+            if not result['OK']:
+                gLogger.error("Failed to commit changes to CS", result['Message'])
+                gLogger.error("Skipping site: %s, DIRAC site: %s..." % (site, diracSite))
+                continue
+            gLogger.notice("Successfully added site %s to the "
+                           "CS with name %s and CEs: %s"
+                           % (diracSiteName, gridSiteName, ','.join(ces)))
+        else:  # DIRAC name already in CS, existing site
             diracSites = result['Value']
-
-        if len(diracSites) > 1:
-            gLogger.notice('Attention! GOC site %s corresponds '
-                           'to more than one DIRAC sites:' % site)
-            gLogger.notice(str(diracSites))
-            gLogger.notice('Please, pay attention which DIRAC '
-                           'site the new CEs will join\n')
-
-        newCEs = {}
-        addedCEs = []
-        for ce, ce_info in ces.iteritems():
-            ceType = ce_info['CEType']
-            for diracSite in diracSites:
-                if ce in addedCEs:
+            if len(diracSites) > 1:
+                gLogger.notice('Attention! GOC site %s corresponds '
+                               'to more than one DIRAC sites:' % site)
+                gLogger.notice(str(diracSites))
+                gLogger.notice('Interactive input required to decide which '
+                               'DIRAC site to use. Please use the command '
+                               'line tool dirac-admin-add-site DIRACSiteName %s %s'
+                               % (site, str(ces.keys())))
+                continue
+            
+            diracSite = diracSites[0]
+            cfgBase += '/%s' % diracSite
+            if ces:
+                CSExistingCEs = set(gConfig.getValue("%s/CE" % cfgBase, []))
+                #newCEs = set(ces) - CSExistingCEs  # This should == set(ces) as we filter only unknown ces
+                gLogger.notice("Adding CEs %s" % ','.join(ces))#newCEs))
+                csAPI.modifyValue("%s/CE" % cfgBase, ','.join(CSExistingCEs | set(ces)))  # Union
+                
+                res = csAPI.commitChanges()
+                if not res['OK']:
+                    gLogger.error("Failed to commit changes to CS", res['Message'])
+                    gLogger.error("Skipping site: %s, DIRAC site: %s..." % (site, diracSite))
                     continue
-                gLogger.notice("Adding CE %s of type %s to %s"
-                               % (ce, ceType, diracSite))
-                newCEs.setdefault(diracSite, []).append(ce)
-                addedCEs.append(ce)
+                gLogger.notice("Successfully added new CEs to site %s: %s"
+                           % (diracSiteName, ','.join(newCEs)))
 
-        for diracSite in diracSites:
-            if diracSite in newCEs:
-                result = addSite(diracSite, site, ' '.join(newCEs[diracSite]))
-                if not result['OK']:
-                    gLogger.error('Error while executing addSite command',
-                                  result['Message'])
-                    if sitesAdded:
-                        gLogger.notice('CEs were added at '
-                                       'the following sites:')
-                        for site, diracSite in sitesAdded:
-                            gLogger.notice("%s\t%s" % (site, diracSite))
-                    gLogger.error('Skipping site %s' % site)
-                    continue
-
-                sitesAdded.append((site, diracSite))
-                result = updateSites(vo, ceBdiiDict)
-                if not result['OK']:
-                    gLogger.error('Problem updating the %s CE info in the CS'
-                                  % diracSite, result['Message'])
-                    continue
-                gLogger.notice('Successfully updated %s CE info in CS' % diracSite)
+        sitesAdded.append((site, diracSite))
 
     gLogger.notice('CEs were added at the following sites:')
     for site, diracSite in sitesAdded:
         gLogger.notice("%s\t%s" % (site, diracSite))
     return S_OK()  # ceBdiiDict)
-
-
-## this comes from dirac-admin-add-site
-def addSite(diracSiteName, gridSiteName, *ces):
-    '''
-    Add CEs for a particular dirac/grid site
-    '''
-    csAPI = CSAPI()
-
-    try:
-        diracGridType, _, _ = diracSiteName.split('.')
-    except ValueError:
-        gLogger.error("The DIRACSiteName should be of the form "
-                      "GRID.LOCATION.COUNTRY for example LCG.CERN.ch")
-        return S_ERROR('DIRACSiteName wrong format')
-
-    result = getDIRACSiteName(gridSiteName)
-    newSite = True
-    if result['OK']:
-        if result['Value']:
-            if len(result['Value']) > 1:
-                gLogger.notice('%s GOC site name is associated with several '
-                               'DIRAC sites:' % gridSiteName)
-                return S_ERROR('interactive input required to decide which '
-                               'DIRAC site to use. Please use the command '
-                               'line tool dirac-admin-add-site %s %s %s'
-                               % (diracSiteName, gridSiteName, str(ces)))
-            else:
-                diracCSSite = result['Value'][0]
-            if diracCSSite == diracSiteName:
-                gLogger.notice('Site with GOC name %s is already '
-                               'defined as %s' % (gridSiteName, diracSiteName))
-                newSite = False
-            else:
-                gLogger.error('ERROR: Site with GOC name %s is already '
-                              'defined as %s' % (gridSiteName, diracCSSite))
-                return S_ERROR('site already defined')
-
-    cfgBase = "/Resources/Sites/%s/%s" % (diracGridType, diracSiteName)
-    change = False
-    if newSite:
-        gLogger.notice("Adding new site to CS: %s" % diracSiteName)
-        csAPI.setOption("%s/Name" % cfgBase, gridSiteName)
-        gLogger.notice("Adding CEs: %s" % ','.join(ces))
-        csAPI.setOption("%s/CE" % cfgBase, ','.join(ces))
-        change = True
-    else:
-        cesCS = set(gConfig.getValue("%s/CE" % cfgBase, []))
-        ces = set(ces)
-        newCEs = ces - cesCS
-        if newCEs:
-            cesCS = cesCS.union(ces)
-            gLogger.notice("Adding CEs %s" % ','.join(newCEs))
-            cesCS = cesCS.union(ces)
-            csAPI.modifyValue("%s/CE" % cfgBase, ','.join(cesCS))
-            change = True
-    if change:
-        res = csAPI.commitChanges()
-        if not res['OK']:
-            gLogger.error("Failed to commit changes to CS", res['Message'])
-            return S_ERROR('Failed to commit changes to CS')
-        else:
-            if newSite:
-                gLogger.notice("Successfully added site %s to the "
-                               "CS with name %s and CEs: %s"
-                               % (diracSiteName, gridSiteName, ','.join(ces)))
-            else:
-                gLogger.notice("Successfully added new CEs to site %s: %s"
-                               % (diracSiteName, ','.join(newCEs)))
-    return S_OK()
 
 
 def updateSites(vo, ceBdiiDict):
@@ -301,13 +225,13 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
 
     #changeSetFull = set()
 
-    csAPI = CSAPI()
-    csAPI.initialize()
-    result = csAPI.downloadCSData()
-    if not result['OK']:
-        gLogger.error('Failed to initialize CSAPI object',
-                      result['Message'])
-        return S_ERROR('Failed to initialize CSAPI object')
+#    csAPI = CSAPI()
+#    csAPI.initialize()
+#    result = csAPI.downloadCSData()
+#    if not result['OK']:
+#        gLogger.error('Failed to initialize CSAPI object',
+#                      result['Message'])
+#        return S_ERROR('Failed to initialize CSAPI object')
 
     for site, ses in siteSRMDict.iteritems():
         for gridSE, se_info in ses.iteritems():
@@ -382,8 +306,8 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
             changeSet.add((accessSection, 'WSUrl', '/srm/managerv2?SFN='))
 
             gLogger.notice('SE %s will be added with the following parameters')
-            changeList = list(changeSet)
-            changeList.sort()
+            #changeList = list(changeSet)
+            #changeList.sort()
             for entry in changeList:
                 gLogger.notice(entry)
             #changeSetFull = changeSetFull.union(changeSet)
@@ -397,19 +321,23 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
             #    return S_ERROR('Failed to initialize CSAPI object')
             #changeList = list(changeSetFull)
             #changeList.sort()
-            for section, option, value in changeList:
-                csAPI.setOption(cfgPath(section, option), value)
+            #for section, option, value in changeList:
+            #    csAPI.setOption(cfgPath(section, option), value)
     
-            result = csAPI.commit()
-            if not result['OK']:
-                gLogger.error("Error while commit %s to CS"
-                              % gridSE, result['Message'])
-                gLogger.error("Skipping...")
-                continue
-            
-            gLogger.notice("Successfully committed %d changes to CS"
-                           % len(changeSet))
-            result = updateSEs(vo)
+            #result = csAPI.commit()
+            #if not result['OK']:
+            #    gLogger.error("Error while commit %s to CS"
+            #                  % gridSE, result['Message'])
+            #    gLogger.error("Skipping...")
+            #    continue
+            result = updateCS(changeSet)
+#            if not result['OK']:
+#                gLogger.error('Failed to update the CS for %s SE, Skipping...' % gridSE)
+#                continue
+#            
+#            gLogger.notice("Successfully committed %d changes to CS"
+#                           % len(changeSet))
+#            result = updateSEs(vo)
             if not result['OK']:
                 gLogger.error('Failed to update %s SE info in CS' % gridSE)
                 continue
