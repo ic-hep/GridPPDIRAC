@@ -16,7 +16,15 @@ from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
 #from DIRAC.Core.Utilities.Grid import ldapService, getBdiiSEInfo
 from DIRAC.Core.Utilities.Pfn import pfnparse
 from DIRAC.ConfigurationSystem.Client.Helpers.Registry import getVOs
+import code
 
+def getCountryCode(ces, default):
+    for countryCode in (ce.strip().split('.')[-1].lower() for ce in ces):
+        if countryCode == 'gov':
+            return 'us'
+        if len(countryCode)==2:
+            return countryCode
+    return default
 
 def checkUnusedCEs(vo, domain, country_default='xx',
                    diracSiteTemplate='{domain}.{site}.{country}'):
@@ -78,22 +86,20 @@ def checkUnusedCEs(vo, domain, country_default='xx',
         gLogger.error('Failed to initialize CSAPI object', result['Message'])
         return S_ERROR('Failed to initialize CSAPI object')
     ## now we add them
-    sitesAdded = []    
+    #sitesAdded = []    
     for site, ces in siteDict.iteritems():
         
-        gLogger.notice("  Site %s:" % site)
-        country = country_default
-        for ce, ce_info in ces.iteritems():
-            gLogger.notice(' '*4+ce)
-            gLogger.notice(' '*6+'%s, %s' % (ce_info['CEType'],
-                                            '%s_%s_%s' % ce_info['System']))
+        #country = country_default
+        #for ce, ce_info in ces.iteritems():
+            #gLogger.notice("New CE resource detected at site %s:   %s, %s, %s" % (site, ce, ce_info['CEType'], '%s_%s_%s' % ce_info['System']))
             # Get the country code:
-            if country == country_default:
-                c_tmp = ce.strip().split('.')[-1].lower()
-                if len(c_tmp) == 2:
-                    country = c_tmp
-                if c_tmp == 'gov':
-                    country = 'us'
+            #country = set((i.strip().split('.')[-1].lower() for i in ces if len(i.strip().split('.')[-1].lower())==2))
+            #if country == country_default:
+            #    c_tmp = ce.strip().split('.')[-1].lower()
+            #    if len(c_tmp) == 2:
+            #        country = c_tmp
+            #    if c_tmp == 'gov':
+            #        country = 'us'
 #    ces = siteDict[site].keys()
 
         cfgBase = "/Resources/Sites/%s" % domain
@@ -101,6 +107,8 @@ def checkUnusedCEs(vo, domain, country_default='xx',
         diracSite = None
         success_msg = ''
         if not result['OK']:  # DIRAC name not in CS, new site
+            gLogger.notice("New site detected: %s" % site)
+            country = getCountryCode(ces.iterkeys(), country_default)
             #diracSite = "%s.%s.%s" % (domain, site, country)
             diracSite = diracSiteTemplate.format(domain=domain,
                                                  site=site,
@@ -110,7 +118,10 @@ def checkUnusedCEs(vo, domain, country_default='xx',
                            % (site, diracSite))
             csAPI.setOption("%s/Name" % cfgBase, site)
             if ces:
-                gLogger.notice("Adding CEs: %s" % ','.join(ces))
+                #for ce, ce_info in ces.iteritems():
+                #    gLogger.notice("New CE resource detected at site %s:   %s, %s, %s" % (site, ce, ce_info['CEType'], '%s_%s_%s' % ce_info['System']))
+                gLogger.notice("New CE resources detected at site(DIRAC site) %s(%s): %s" % (site, diracSite, ','.join(ces)))
+                gLogger.notice("Adding CE list: %s to site(DIRAC site): %s(%s)" % (','.join(ces), site, diracSite))
                 csAPI.setOption("%s/CE" % cfgBase, ','.join(ces))
             #result = csAPI.commitChanges()
             #if not result['OK']:
@@ -121,10 +132,10 @@ def checkUnusedCEs(vo, domain, country_default='xx',
             #               "CS with name %s and CEs: %s"
             #               % (diracSite, site, ','.join(ces)))
             success_msg = "Successfully added site %s to the "\
-                           "CS with name %s and CEs: %s"\
-                           % (diracSite, site, ','.join(ces))
+                           "CS with name %s and CE list: %s"\
+                           % (site, diracSite, ','.join(ces))
 
-        else:  # DIRAC name already in CS, existing site
+        else:  # DIRAC name already in CS, existing site but new CE
             diracSites = result['Value']
             if len(diracSites) > 1:
                 gLogger.notice('Attention! GOC site %s corresponds '
@@ -141,7 +152,8 @@ def checkUnusedCEs(vo, domain, country_default='xx',
             if ces:
                 CSExistingCEs = set(gConfig.getValue("%s/CE" % cfgBase, []))
                 #newCEs = set(ces) - CSExistingCEs  # This should == set(ces) as we filter only unknown ces
-                gLogger.notice("Adding CEs %s" % ','.join(ces))#newCEs))
+                gLogger.notice("New CE resources detected at site(DIRAC site) %s(%s): %s" % (site, diracSite, ','.join(ces)))
+                gLogger.notice("Adding CEs %s to existing CE list for site(DIRAC site) %s(%s)" % (','.join(ces), site, diracSite))#newCEs))
                 csAPI.modifyValue("%s/CE" % cfgBase, ','.join(CSExistingCEs | set(ces)))  # Union
                 
                 #res = csAPI.commitChanges()
@@ -151,7 +163,7 @@ def checkUnusedCEs(vo, domain, country_default='xx',
                 #    continue
                 #gLogger.notice("Successfully added new CEs to site %s: %s"
                 #           % (diracSite, ','.join(ces)))
-                success_msg = "Successfully added new CEs to site %s: %s"\
+                success_msg = "Successfully added in CS new CEs to site %s: %s"\
                               % (diracSite, ','.join(ces))
 
         result = csAPI.commitChanges()
@@ -160,19 +172,20 @@ def checkUnusedCEs(vo, domain, country_default='xx',
             gLogger.error("Skipping site: %s, DIRAC site: %s..." % (site, diracSite))
             continue
         gLogger.notice(success_msg)
-        sitesAdded.append((site, diracSite))
+        #sitesAdded.append((site, diracSite))
 
-    gLogger.notice('CEs were added at the following sites:')
-    for site, diracSite in sitesAdded:
-        gLogger.notice("%s\t%s" % (site, diracSite))
-    updateSites(vo)
+#    gLogger.notice('CEs were added at the following sites:')
+#    for site, diracSite in sitesAdded:
+#        gLogger.notice("%s\t%s" % (site, diracSite))
+    updateSites(vo, ceBdiiDict)
     return S_OK()  # ceBdiiDict)
 
 
-def updateSites(vo, ceBdiiDict):
+def updateSites(vo, ceBdiiDict=None):
     '''
     update sites
     '''
+    gLogger.notice('Fetching updated information for sites in CS from BDII...')
     result = getSiteUpdates(vo, bdiiInfo=ceBdiiDict)
     if not result['OK']:
         gLogger.error('Failed to get site updates', result['Message'])
@@ -197,23 +210,25 @@ def updateCS(changeSet):
     '''
     update CS
     '''
-    changeList = list(changeSet)
-    changeList.sort()
-
-    gLogger.notice('We are about to make the following changes to CS:\n')
-    for entry in changeList:
-        gLogger.notice("%s/%s %s -> %s" % entry)
-
     csAPI = CSAPI()
     csAPI.initialize()
     result = csAPI.downloadCSData()
     if not result['OK']:
         gLogger.error('Failed to initialize CSAPI object', result['Message'])
-        return S_ERROR('Failed to initialize CSAPI object')
+        return S_ERROR('Failed to initialize CSAPI object') 
+    
+    changeList = list(changeSet)
+    changeList.sort()
+
+    glogger.notice('Updating the CS...')
+    gLogger.notice('We are about to make the following changes to CS:\n')
+
     for section, option, value, new_value in changeSet:
         if value == 'Unknown' or not value:
+            gLogger.notice("Setting %s/%s:   -> %s" % (section, option, new_value))
             csAPI.setOption(cfgPath(section, option), new_value)
         else:
+            gLogger.notice("Modifying %s/%s:   %s -> %s" % (section, option, value, new_value))
             csAPI.modifyValue(cfgPath(section, option), new_value)
 
     result = csAPI.commit()
