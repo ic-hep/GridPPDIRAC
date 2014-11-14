@@ -132,7 +132,7 @@ def checkUnusedCEs(vo, domain, country_default='xx',
             #               "CS with name %s and CEs: %s"
             #               % (diracSite, site, ','.join(ces)))
             success_msg = "Successfully added site %s to the "\
-                           "CS with name %s and CE list: %s"\
+                           "CS with name %s and CE list: %s\n"\
                            % (site, diracSite, ','.join(ces))
 
         else:  # DIRAC name already in CS, existing site but new CE
@@ -163,13 +163,13 @@ def checkUnusedCEs(vo, domain, country_default='xx',
                 #    continue
                 #gLogger.notice("Successfully added new CEs to site %s: %s"
                 #           % (diracSite, ','.join(ces)))
-                success_msg = "Successfully added in CS new CEs to site %s: %s"\
+                success_msg = "Successfully added in CS new CEs to site %s: %s\n"\
                               % (diracSite, ','.join(ces))
 
         result = csAPI.commitChanges()
         if not result['OK']:
             gLogger.error("Failed to commit changes to CS", result['Message'])
-            gLogger.error("Skipping site: %s, DIRAC site: %s..." % (site, diracSite))
+            gLogger.error("Skipping site: %s, DIRAC site: %s...\n" % (site, diracSite))
             continue
         gLogger.notice(success_msg)
         #sitesAdded.append((site, diracSite))
@@ -220,7 +220,7 @@ def updateCS(changeSet):
     changeList = list(changeSet)
     changeList.sort()
 
-    glogger.notice('Updating the CS...')
+    gLogger.notice('Updating the CS...')
     gLogger.notice('We are about to make the following changes to CS:\n')
 
     for section, option, value, new_value in changeSet:
