@@ -35,7 +35,19 @@ def checkUnusedCEs(vo, domain, country_default='xx',
                               {country}       - The country code e.g. uk,
                                                 defaulting to country_default
                                                 if it cannot be determined
-                                                automatically
+                                                    automatically
+    *************************************************************************
+    ces dict maps ce string to ce_info dict
+    ---------------------------------------
+    example of ce string:
+        'ceprod06.grid.hep.ph.ic.ac.uk'
+    example of the ce_info dict:
+        {'System'  : ('CentOS', 'Final', '6.5'),
+         'Queues'  : ['cream-sge-grid.q'],
+         'GOCSite' : 'UKI-LT2-IC-HEP',
+         'CEType'  : 'CREAM',
+         'CEID'    : 'ceprod06.grid.hep.ph.ic.ac.uk'}
+    *************************************************************************
     '''
     ceBdiiDict = None
     gLogger.notice('looking for new computing resources '
@@ -86,6 +98,8 @@ def checkUnusedCEs(vo, domain, country_default='xx',
 
         cfgBase = "/Resources/Sites/%s" % domain
         result = getDIRACSiteName(site)
+        diracSite = None
+        success_msg = ''
         if not result['OK']:  # DIRAC name not in CS, new site
             #diracSite = "%s.%s.%s" % (domain, site, country)
             diracSite = diracSiteTemplate.format(domain=domain,
@@ -98,14 +112,18 @@ def checkUnusedCEs(vo, domain, country_default='xx',
             if ces:
                 gLogger.notice("Adding CEs: %s" % ','.join(ces))
                 csAPI.setOption("%s/CE" % cfgBase, ','.join(ces))
-            result = csAPI.commitChanges()
-            if not result['OK']:
-                gLogger.error("Failed to commit changes to CS", result['Message'])
-                gLogger.error("Skipping site: %s, DIRAC site: %s..." % (site, diracSite))
-                continue
-            gLogger.notice("Successfully added site %s to the "
-                           "CS with name %s and CEs: %s"
-                           % (diracSite, site, ','.join(ces)))
+            #result = csAPI.commitChanges()
+            #if not result['OK']:
+            #    gLogger.error("Failed to commit changes to CS", result['Message'])
+            #    gLogger.error("Skipping site: %s, DIRAC site: %s..." % (site, diracSite))
+            #    continue
+            #gLogger.notice("Successfully added site %s to the "
+            #               "CS with name %s and CEs: %s"
+            #               % (diracSite, site, ','.join(ces)))
+            success_msg = "Successfully added site %s to the "\
+                           "CS with name %s and CEs: %s"\
+                           % (diracSite, site, ','.join(ces))
+
         else:  # DIRAC name already in CS, existing site
             diracSites = result['Value']
             if len(diracSites) > 1:
@@ -126,19 +144,28 @@ def checkUnusedCEs(vo, domain, country_default='xx',
                 gLogger.notice("Adding CEs %s" % ','.join(ces))#newCEs))
                 csAPI.modifyValue("%s/CE" % cfgBase, ','.join(CSExistingCEs | set(ces)))  # Union
                 
-                res = csAPI.commitChanges()
-                if not res['OK']:
-                    gLogger.error("Failed to commit changes to CS", res['Message'])
-                    gLogger.error("Skipping site: %s, DIRAC site: %s..." % (site, diracSite))
-                    continue
-                gLogger.notice("Successfully added new CEs to site %s: %s"
-                           % (diracSite, ','.join(ces)))
+                #res = csAPI.commitChanges()
+                #if not res['OK']:
+                #    gLogger.error("Failed to commit changes to CS", res['Message'])
+                #    gLogger.error("Skipping site: %s, DIRAC site: %s..." % (site, diracSite))
+                #    continue
+                #gLogger.notice("Successfully added new CEs to site %s: %s"
+                #           % (diracSite, ','.join(ces)))
+                success_msg = "Successfully added new CEs to site %s: %s"\
+                              % (diracSite, ','.join(ces))
 
+        result = csAPI.commitChanges()
+        if not result['OK']:
+            gLogger.error("Failed to commit changes to CS", result['Message'])
+            gLogger.error("Skipping site: %s, DIRAC site: %s..." % (site, diracSite))
+            continue
+        gLogger.notice(success_msg)
         sitesAdded.append((site, diracSite))
 
     gLogger.notice('CEs were added at the following sites:')
     for site, diracSite in sitesAdded:
         gLogger.notice("%s\t%s" % (site, diracSite))
+    updateSites(vo)
     return S_OK()  # ceBdiiDict)
 
 
@@ -373,11 +400,11 @@ if __name__ == '__main__':
     #    gLogger.error("Error while updating sites", result['Message'])
     #    sys.exit(1)
 
-    result = checkUnusedSEs(options.vo)
-    if not result['OK']:
-        gLogger.error("Error while running check for unused SEs",
-                      result['Message'])
-        sys.exit(1)
+#    result = checkUnusedSEs(options.vo)
+#    if not result['OK']:
+#        gLogger.error("Error while running check for unused SEs",
+#                      result['Message'])
+#        sys.exit(1)
 
     #result = updateSEs(options.vo)
     #if not result['OK']:
