@@ -120,8 +120,8 @@ def checkUnusedCEs(vo, domain, country_default='xx',
             if ces:
                 #for ce, ce_info in ces.iteritems():
                 #    gLogger.notice("New CE resource detected at site %s:   %s, %s, %s" % (site, ce, ce_info['CEType'], '%s_%s_%s' % ce_info['System']))
-                gLogger.notice("New CE resources detected at site(DIRAC site) %s(%s): %s" % (site, diracSite, ','.join(ces)))
-                gLogger.notice("Adding CE list: %s to site(DIRAC site): %s(%s)" % (','.join(ces), site, diracSite))
+                gLogger.notice("New CE resources detected at %s(%s): %s" % (site, diracSite, ','.join(ces)))
+                gLogger.notice("Adding CE list: %s to %s(%s)" % (','.join(ces), site, diracSite))
                 csAPI.setOption("%s/CE" % cfgBase, ','.join(ces))
             #result = csAPI.commitChanges()
             #if not result['OK']:
@@ -152,8 +152,8 @@ def checkUnusedCEs(vo, domain, country_default='xx',
             if ces:
                 CSExistingCEs = set(gConfig.getValue("%s/CE" % cfgBase, []))
                 #newCEs = set(ces) - CSExistingCEs  # This should == set(ces) as we filter only unknown ces
-                gLogger.notice("New CE resources detected at site(DIRAC site) %s(%s): %s" % (site, diracSite, ','.join(ces)))
-                gLogger.notice("Adding CEs %s to existing CE list for site(DIRAC site) %s(%s)" % (','.join(ces), site, diracSite))#newCEs))
+                gLogger.notice("New CE resources detected at %s(%s): %s" % (site, diracSite, ','.join(ces)))
+                gLogger.notice("Adding CEs %s to existing CE list for %s(%s)" % (','.join(ces), site, diracSite))#newCEs))
                 csAPI.modifyValue("%s/CE" % cfgBase, ','.join(CSExistingCEs | set(ces)))  # Union
                 
                 #res = csAPI.commitChanges()
@@ -186,6 +186,7 @@ def updateSites(vo, ceBdiiDict=None):
     update sites
     '''
     gLogger.notice('Fetching updated information for sites in CS from BDII...')
+    gLogger.notice('---------------------------------------------------------')
     result = getSiteUpdates(vo, bdiiInfo=ceBdiiDict)
     if not result['OK']:
         gLogger.error('Failed to get site updates', result['Message'])
@@ -220,8 +221,9 @@ def updateCS(changeSet):
     changeList = list(changeSet)
     changeList.sort()
 
-    gLogger.notice('Updating the CS...')
-    gLogger.notice('We are about to make the following changes to CS:\n')
+    gLogger.notice('\nUpdating the CS...')
+    gLogger.notice('------------------')
+    gLogger.notice('We are about to make the following changes to CS:')
 
     for section, option, value, new_value in changeSet:
         if value == 'Unknown' or not value:
