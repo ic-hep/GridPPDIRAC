@@ -18,6 +18,13 @@ from DIRAC.Core.Utilities.Pfn import pfnparse
 from DIRAC.ConfigurationSystem.Client.Helpers.Registry import getVOs
 #import code
 
+class configSet(set):
+    def add(self, section, option, new_value):
+        super(configSet, self).add((section,
+                                    option,
+                                    gConfig.getValue(cfgPath(section, option), None),
+                                    new_value))
+        
 
 def _getCountryCode(ces, default):
     '''
@@ -270,7 +277,7 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
         csVOs = set([vo])
 
 #    changeSetFull = set()
-    changeSet = set()
+    changeSet = configSet()
 
 #    csAPI = CSAPI()
 #    csAPI.initialize()
