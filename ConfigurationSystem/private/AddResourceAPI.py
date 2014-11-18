@@ -318,21 +318,32 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
 
             gLogger.notice('Adding new SE %s at site %s'
                            % (diracSEName, diracSite))
-            seSection = cfgPath('/Resources/StorageElements', diracSEName)
-            changeSet.add((seSection, 'BackendType',
-                           seDict.get('GlueSEImplementationName', 'Unknown')))
-            changeSet.add((seSection, 'Description',
-                           seDict.get('GlueSEName', 'Unknown')))
+            cfgBase = '/Resources/StorageElements'
+            seSection = cfgPath(cfgBase, diracSEName)
+            csAPI.setOption("%s/BackendType" % seSection,
+                            seDict.get('GlueSEImplementationName', 'Unknown'))
+            csAPI.setOption("%s/Description" % seSection,
+                            seDict.get('GlueSEName', 'Unknown'))
+            #changeSet.add((seSection, 'BackendType',
+            #               seDict.get('GlueSEImplementationName', 'Unknown')))
+            #changeSet.add((seSection, 'Description',
+            #               seDict.get('GlueSEName', 'Unknown')))
             bdiiVOs = set([re.sub('^VO:', '', rule) for rule in
                            srmDict.get('GlueServiceAccessControlBaseRule',
                                        []
                                        )
                            ])
             seVOs = csVOs.intersection(bdiiVOs)
-            changeSet.add((seSection, 'VO', ','.join(seVOs)))
+            csAPI.setOption("%s/VO" % seSection,
+                            ','.join(seVOs))
+            #changeSet.add((seSection, 'VO', ','.join(seVOs)))
             accessSection = cfgPath(seSection, 'AccessProtocol.1')
-            changeSet.add((accessSection, 'Protocol', 'srm'))
-            changeSet.add((accessSection, 'ProtocolName', 'SRM2'))
+            csAPI.setOption(cfgPath(accessSection, 'Protocol'),
+                            'srm')
+            csAPI.setOption(cfgPath(accessSection, 'ProtocolName'),
+                            'SRM2')
+#            changeSet.add((accessSection, 'Protocol', 'srm'))
+#            changeSet.add((accessSection, 'ProtocolName', 'SRM2'))
             endPoint = srmDict.get('GlueServiceEndpoint', '')
             result = pfnparse(endPoint)
             if not result['OK']:
@@ -341,15 +352,22 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
                 continue
             host = result['Value']['Host']
             port = result['Value']['Port']
-            changeSet.add((accessSection, 'Host', host))
-            changeSet.add((accessSection, 'Port', port))
-            changeSet.add((accessSection, 'Access', 'remote'))
+            csAPI.setOption(cfgPath(accessSection, 'Host'), host)
+            csAPI.setOption(cfgPath(accessSection, 'Port'), port)
+            csAPI.setOption(cfgPath(accessSection, 'Access'), 'remote')
+#            changeSet.add((accessSection, 'Host', host))
+#            changeSet.add((accessSection, 'Port', port))
+#            changeSet.add((accessSection, 'Access', 'remote'))
             # Try to guess the Path
             domain = '.'.join(host.split('.')[-2:])
             path = '/dpm/%s/home' % domain
-            changeSet.add((accessSection, 'Path', path))
-            changeSet.add((accessSection, 'SpaceToken', ''))
-            changeSet.add((accessSection, 'WSUrl', '/srm/managerv2?SFN='))
+            
+            csAPI.setOption(cfgPath(accessSection, 'Path'), path)
+            csAPI.setOption(cfgPath(accessSection, 'SpaceToken'), '')
+            csAPI.setOption(cfgPath(accessSection, 'WSUrl'), '/srm/managerv2?SFN=')
+#            changeSet.add((accessSection, 'Path', path))
+#            changeSet.add((accessSection, 'SpaceToken', ''))
+#            changeSet.add((accessSection, 'WSUrl', '/srm/managerv2?SFN='))
 
             gLogger.notice('SE %s will be added with the following parameters')
             #changeList = list(changeSet)
