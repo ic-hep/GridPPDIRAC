@@ -30,8 +30,9 @@ def _getCountryCode(ces, default):
             return countryCode
     return default
 
-def _siteDictFilter(siteDict):
-    return {site: ces for site, ces in siteDict.iteritems() if not getDIRACSiteName(site)['OK'] or ces}
+## Idea here is to allow it to properly exit if sites that have no new CEs are in list
+#def _siteDictFilter(siteDict):
+#    return {site: ces for site, ces in siteDict.iteritems() if not getDIRACSiteName(site)['OK'] or ces}
 
 
 def checkUnusedCEs(vo, domain, country_default='xx',
@@ -268,8 +269,8 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
     else:
         csVOs = set([vo])
 
-    #changeSetFull = set()
-
+#    changeSetFull = set()
+    changeSet = set()
 
 #    csAPI = CSAPI()
 #    csAPI.initialize()
@@ -320,30 +321,30 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
                            % (diracSEName, diracSite))
             cfgBase = '/Resources/StorageElements'
             seSection = cfgPath(cfgBase, diracSEName)
-            csAPI.setOption("%s/BackendType" % seSection,
-                            seDict.get('GlueSEImplementationName', 'Unknown'))
-            csAPI.setOption("%s/Description" % seSection,
-                            seDict.get('GlueSEName', 'Unknown'))
-            #changeSet.add((seSection, 'BackendType',
-            #               seDict.get('GlueSEImplementationName', 'Unknown')))
-            #changeSet.add((seSection, 'Description',
-            #               seDict.get('GlueSEName', 'Unknown')))
+            #csAPI.setOption("%s/BackendType" % seSection,
+            #                seDict.get('GlueSEImplementationName', 'Unknown'))
+            #csAPI.setOption("%s/Description" % seSection,
+            #                seDict.get('GlueSEName', 'Unknown'))
+            changeSet.add((seSection, 'BackendType',
+                           seDict.get('GlueSEImplementationName', 'Unknown')))
+            changeSet.add((seSection, 'Description',
+                           seDict.get('GlueSEName', 'Unknown')))
             bdiiVOs = set([re.sub('^VO:', '', rule) for rule in
                            srmDict.get('GlueServiceAccessControlBaseRule',
                                        []
                                        )
                            ])
             seVOs = csVOs.intersection(bdiiVOs)
-            csAPI.setOption("%s/VO" % seSection,
-                            ','.join(seVOs))
-            #changeSet.add((seSection, 'VO', ','.join(seVOs)))
+            #csAPI.setOption("%s/VO" % seSection,
+            #                ','.join(seVOs))
+            changeSet.add((seSection, 'VO', ','.join(seVOs)))
             accessSection = cfgPath(seSection, 'AccessProtocol.1')
-            csAPI.setOption(cfgPath(accessSection, 'Protocol'),
-                            'srm')
-            csAPI.setOption(cfgPath(accessSection, 'ProtocolName'),
-                            'SRM2')
-#            changeSet.add((accessSection, 'Protocol', 'srm'))
-#            changeSet.add((accessSection, 'ProtocolName', 'SRM2'))
+            #csAPI.setOption(cfgPath(accessSection, 'Protocol'),
+            #                'srm')
+            #csAPI.setOption(cfgPath(accessSection, 'ProtocolName'),
+            #                'SRM2')
+            changeSet.add((accessSection, 'Protocol', 'srm'))
+            changeSet.add((accessSection, 'ProtocolName', 'SRM2'))
             endPoint = srmDict.get('GlueServiceEndpoint', '')
             result = pfnparse(endPoint)
             if not result['OK']:
@@ -352,24 +353,24 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
                 continue
             host = result['Value']['Host']
             port = result['Value']['Port']
-            csAPI.setOption(cfgPath(accessSection, 'Host'), host)
-            csAPI.setOption(cfgPath(accessSection, 'Port'), port)
-            csAPI.setOption(cfgPath(accessSection, 'Access'), 'remote')
-#            changeSet.add((accessSection, 'Host', host))
-#            changeSet.add((accessSection, 'Port', port))
-#            changeSet.add((accessSection, 'Access', 'remote'))
+            #csAPI.setOption(cfgPath(accessSection, 'Host'), host)
+            #csAPI.setOption(cfgPath(accessSection, 'Port'), port)
+            #csAPI.setOption(cfgPath(accessSection, 'Access'), 'remote')
+            changeSet.add((accessSection, 'Host', host))
+            changeSet.add((accessSection, 'Port', port))
+            changeSet.add((accessSection, 'Access', 'remote'))
             # Try to guess the Path
             domain = '.'.join(host.split('.')[-2:])
             path = '/dpm/%s/home' % domain
             
-            csAPI.setOption(cfgPath(accessSection, 'Path'), path)
-            csAPI.setOption(cfgPath(accessSection, 'SpaceToken'), '')
-            csAPI.setOption(cfgPath(accessSection, 'WSUrl'), '/srm/managerv2?SFN=')
-#            changeSet.add((accessSection, 'Path', path))
-#            changeSet.add((accessSection, 'SpaceToken', ''))
-#            changeSet.add((accessSection, 'WSUrl', '/srm/managerv2?SFN='))
+            #csAPI.setOption(cfgPath(accessSection, 'Path'), path)
+            #csAPI.setOption(cfgPath(accessSection, 'SpaceToken'), '')
+            #csAPI.setOption(cfgPath(accessSection, 'WSUrl'), '/srm/managerv2?SFN=')
+            changeSet.add((accessSection, 'Path', path))
+            changeSet.add((accessSection, 'SpaceToken', ''))
+            changeSet.add((accessSection, 'WSUrl', '/srm/managerv2?SFN='))
 
-            gLogger.notice('SE %s will be added with the following parameters')
+            #gLogger.notice('SE %s will be added with the following parameters')
             #changeList = list(changeSet)
             #changeList.sort()
             #for entry in changeList:
@@ -409,11 +410,11 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
 #            gLogger.notice("Successfully committed %d changes to CS"
 #                           % len(changeSet))
 #            result = updateSEs(vo)
-            if not result['OK']:
-                gLogger.error('Failed to update %s SE info in CS' % gridSE)
-                continue
-            gLogger.notice('Successfully updated %s SE info in CS' % gridSE)
-    updateSEs(vo)
+            #if not result['OK']:
+            #    gLogger.error('Failed to update %s SE info in CS' % gridSE)
+            #    continue
+            gLogger.notice('Successfully updated %s SE info in CS\n' % gridSE)
+    updateCS(changeSet)
     return S_OK()
 
 
