@@ -30,6 +30,9 @@ def _getCountryCode(ces, default):
             return countryCode
     return default
 
+def _siteDictFilter(siteDict):
+    return {site: ces for site, ces in siteDict.iteritems() if not getDIRACSiteName(site)['OK'] or ces}
+
 
 def checkUnusedCEs(vo, domain, country_default='xx',
                    diracSiteTemplate='{domain}.{site}.{country}'):
@@ -243,6 +246,15 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
                               {country}       - The country code e.g. uk,
                               {gridSE}        - The Grid SE name
     '''
+    
+    ## Initialise the CSAPI
+    csAPI = CSAPI()
+    csAPI.initialize()
+    result = csAPI.downloadCSData()
+    if not result['OK']:
+        gLogger.error('Failed to initialise CSAPI object', result['Message'])
+        return S_ERROR('Failed to initialise CSAPI object')
+    
     result = getGridSRMs(vo, unUsed=True)
     if not result['OK']:
         gLogger.error('Failed to look up SRMs in BDII', result['Message'])
@@ -257,6 +269,7 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
         csVOs = set([vo])
 
     #changeSetFull = set()
+
 
 #    csAPI = CSAPI()
 #    csAPI.initialize()
@@ -363,7 +376,14 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
             #                  % gridSE, result['Message'])
             #    gLogger.error("Skipping...")
             #    continue
-            result = updateCS(changeSet)
+            #result = updateCS(changeSet)
+            result = csAPI.commitChanges()
+            if not result['OK']:
+                gLogger.error("Failed to commit changes to CS", result['Message'])
+                gLogger.error("Skipping gridSE: %s ..." % gridSE)
+                #gLogger.error("Skipping site: %s, DIRAC site: %s...\n"
+                #          % (site, diracSite))
+                continue
 #            if not result['OK']:
 #                gLogger.error('Failed to update the CS for %s SE, Skipping...' % gridSE)
 #                continue
@@ -375,7 +395,7 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
                 gLogger.error('Failed to update %s SE info in CS' % gridSE)
                 continue
             gLogger.notice('Successfully updated %s SE info in CS' % gridSE)
-
+    updateSEs(vo)
     return S_OK()
 
 
