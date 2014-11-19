@@ -179,34 +179,34 @@ def checkUnusedCEs(vo, domain, country_default='xx',
     return S_OK()
 
 
-#def updateSites(vo, ceBdiiDict=None):
-#    '''
-#    update sites
-#    '''
-#    gLogger.notice('Fetching updated information for sites in CS from BDII...')
-#    gLogger.notice('---------------------------------------------------------')
-#    result = getSiteUpdates(vo, bdiiInfo=ceBdiiDict)
-#    if not result['OK']:
-#        gLogger.error('Failed to get site updates', result['Message'])
-#        return S_ERROR('Failed to get site updates')
-#    changeSet = result['Value']
-#    return updateCS(changeSet)
-def _updateSites(vo, ceBdiiDict=None):
+def updateSites(vo, ceBdiiDict=None):
     '''
     update sites
     '''
     gLogger.notice('Fetching updated information for sites in CS from BDII...')
     gLogger.notice('---------------------------------------------------------')
-    return getSiteUpdates(vo, bdiiInfo=ceBdiiDict)
-
-def updateSites(vo, ceBdiiDict=None):
-    result = _updateSites(vo, ceBdiiDict=None)
+    result = getSiteUpdates(vo, bdiiInfo=ceBdiiDict)
     if not result['OK']:
         gLogger.error('Failed to get site updates', result['Message'])
         return S_ERROR('Failed to get site updates')
-    return updateCS(result['Value'])
+    changeSet = result['Value']
+    return updateCS(changeSet)
+#def _updateSites(vo, ceBdiiDict=None):
+#    '''
+#    update sites
+#    '''
+#    gLogger.notice('Fetching updated information for sites in CS from BDII...')
+#    gLogger.notice('---------------------------------------------------------')
+#    return getSiteUpdates(vo, bdiiInfo=ceBdiiDict)
+#
+#def updateSites(vo, ceBdiiDict=None):
+#    result = _updateSites(vo, ceBdiiDict=None)
+#    if not result['OK']:
+#        gLogger.error('Failed to get site updates', result['Message'])
+#        return S_ERROR('Failed to get site updates')
+#    return updateCS(result['Value'])
 
-def _updateSEs(vo):
+def updateSEs(vo):
     '''
     update SEs
     '''
@@ -436,15 +436,16 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
             #    continue
             gLogger.notice('Successfully updated %s SE info in CS\n' % gridSE)
             
-    ## duplicate from updateSE
+    ## duplicate from updateSE - only works once they have already been updated
     result = getSRMUpdates(vo)
     if not result['OK']:
         gLogger.error('Failed to get SRM updates', result['Message'])
         return S_ERROR('Failed to get SRM updates')
     changeSet.update(result['Value'])
     
-    updateCS(changeSet)
-    return S_OK()
+    return updateCS(changeSet)
+#    updateSEs(vo)
+#    return S_OK()
 
 
 if __name__ == '__main__':
@@ -474,13 +475,13 @@ if __name__ == '__main__':
     #    gLogger.error("Error while updating sites", result['Message'])
     #    sys.exit(1)
 
-#    result = checkUnusedSEs(options.vo)
-#    if not result['OK']:
-#        gLogger.error("Error while running check for unused SEs",
-#                      result['Message'])
-#        sys.exit(1)
+    result = checkUnusedSEs(options.vo)
+    if not result['OK']:
+        gLogger.error("Error while running check for unused SEs:",
+                      result['Message'])
+        sys.exit(1)
 
-    #result = updateSEs(options.vo)
-    #if not result['OK']:
-    #    gLogger.error("Error while updating SEs", result['Message'])
-    #    sys.exit(1)
+    result = updateSEs(options.vo)
+    if not result['OK']:
+        gLogger.error("Error while updating SEs:", result['Message'])
+        sys.exit(1)
