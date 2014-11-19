@@ -179,21 +179,34 @@ def checkUnusedCEs(vo, domain, country_default='xx',
     return S_OK()
 
 
-def updateSites(vo, ceBdiiDict=None):
+#def updateSites(vo, ceBdiiDict=None):
+#    '''
+#    update sites
+#    '''
+#    gLogger.notice('Fetching updated information for sites in CS from BDII...')
+#    gLogger.notice('---------------------------------------------------------')
+#    result = getSiteUpdates(vo, bdiiInfo=ceBdiiDict)
+#    if not result['OK']:
+#        gLogger.error('Failed to get site updates', result['Message'])
+#        return S_ERROR('Failed to get site updates')
+#    changeSet = result['Value']
+#    return updateCS(changeSet)
+def _updateSites(vo, ceBdiiDict=None):
     '''
     update sites
     '''
     gLogger.notice('Fetching updated information for sites in CS from BDII...')
     gLogger.notice('---------------------------------------------------------')
-    result = getSiteUpdates(vo, bdiiInfo=ceBdiiDict)
+    return getSiteUpdates(vo, bdiiInfo=ceBdiiDict)
+
+def updateSites(vo, ceBdiiDict=None):
+    result = _updateSites(vo, ceBdiiDict=None)
     if not result['OK']:
         gLogger.error('Failed to get site updates', result['Message'])
         return S_ERROR('Failed to get site updates')
-    changeSet = result['Value']
-    return updateCS(changeSet)
+    return updateCS(result['Value'])
 
-
-def updateSEs(vo):
+def _updateSEs(vo):
     '''
     update SEs
     '''
@@ -422,6 +435,14 @@ def checkUnusedSEs(vo, diracSENameTemplate='{DIRACSiteName}-disk'):
             #    gLogger.error('Failed to update %s SE info in CS' % gridSE)
             #    continue
             gLogger.notice('Successfully updated %s SE info in CS\n' % gridSE)
+            
+    ## duplicate from updateSE
+    result = getSRMUpdates(vo)
+    if not result['OK']:
+        gLogger.error('Failed to get SRM updates', result['Message'])
+        return S_ERROR('Failed to get SRM updates')
+    changeSet.update(result['Value'])
+    
     updateCS(changeSet)
     return S_OK()
 
