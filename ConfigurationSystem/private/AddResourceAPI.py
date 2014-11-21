@@ -18,6 +18,8 @@ from DIRAC.Core.Utilities.Pfn import pfnparse
 from DIRAC.ConfigurationSystem.Client.Helpers.Registry import getVOs
 #import code
 
+__all__ = ['checkUnusedCEs', 'checkUnusedSEs', 'updateSites', 'updateSEs']
+
 class configSet(set):
     def add(self, section, option, new_value):
         super(configSet, self).add((section,
@@ -248,56 +250,49 @@ def checkUnusedSEs(vo, domain='LCG', country_default='xx',
         for se, se_info in ses.iteritems():
             seDict = se_info['SE']
             srmDict = se_info['SRM']
+
             # Check the SRM version
             version = srmDict.get('GlueServiceVersion', '')
             if not (version and version.startswith('2')):
                 gLogger.debug('Skipping SRM service with version %s' % version)
                 continue
+            
+            result = pfnparse(srmDict.get('GlueServiceEndpoint', ''))
+            if not result['OK']:
+                gLogger.error('Can not get the SRM service end point. '
+                              'Skipping ...')
+                continue
 
+            host = result['Value']['Host']
+            port = result['Value']['Port']
+            # Try to guess the Path
+            path = '/dpm/%s/home' % '.'.join(host.split('.')[-2:])
+            bdiiVOs = set([re.sub('^VO:', '', rule) for rule in
+                           srmDict.get('GlueServiceAccessControlBaseRule', [])
+                           ])
+            seVOs = csVOs.intersection(bdiiVOs)
+            backend_type = seDict.get('GlueSEImplementationName', 'Unknown')
+            description = seDict.get('GlueSEName', 'Unknown')
+            
+                        
             siteDomain, siteName, siteCountry = diracSite.split('.')
             diracSEName = diracSENameTemplate.format(domain=siteDomain,
                                                      DIRACSiteName=siteName,
                                                      country=siteCountry,
                                                      girdSE=se)
-            gLogger.notice('Grid SE %s will get the DIRAC name %s'
-                           % (se, diracSEName))
-
-            gLogger.notice('Adding new SE %s at site %s'
-                           % (diracSEName, diracSite))
+            gLogger.notice('Adding new SE %s with DIRAC name %s at site %s'
+                           % (se, diracSEName, diracSite))
             
             seSection = cfgPath(cfgBase, diracSEName)
-
-            changeSet.add(seSection, 'BackendType',
-                           seDict.get('GlueSEImplementationName', 'Unknown'))
-            changeSet.add(seSection, 'Description',
-                           seDict.get('GlueSEName', 'Unknown'))
-            bdiiVOs = set([re.sub('^VO:', '', rule) for rule in
-                           srmDict.get('GlueServiceAccessControlBaseRule',
-                                       []
-                                       )
-                           ])
-            seVOs = csVOs.intersection(bdiiVOs)
-
-            changeSet.add(seSection, 'VO', ','.join(seVOs))
             accessSection = cfgPath(seSection, 'AccessProtocol.1')
-
+            changeSet.add(seSection, 'BackendType', backend_type)
+            changeSet.add(seSection, 'Description', description)
+            changeSet.add(seSection, 'VO', ','.join(seVOs))
             changeSet.add(accessSection, 'Protocol', 'srm')
             changeSet.add(accessSection, 'ProtocolName', 'SRM2')
-            endPoint = srmDict.get('GlueServiceEndpoint', '')
-            result = pfnparse(endPoint)
-            if not result['OK']:
-                gLogger.error('Can not get the SRM service end point. '
-                              'Skipping ...')
-                continue
-            host = result['Value']['Host']
-            port = result['Value']['Port']
-
             changeSet.add(accessSection, 'Host', host)
             changeSet.add(accessSection, 'Port', port)
             changeSet.add(accessSection, 'Access', 'remote')
-            # Try to guess the Path
-            path = '/dpm/%s/home' % '.'.join(host.split('.')[-2:])
-
             changeSet.add(accessSection, 'Path', path)
             changeSet.add(accessSection, 'SpaceToken', '')
             changeSet.add(accessSection, 'WSUrl', '/srm/managerv2?SFN=')
@@ -326,11 +321,9 @@ if __name__ == '__main__':
     gLogger.notice('looking for new computing resources in the BDII database...')
     gLogger.notice('-----------------------------------------------------------')
     
-    #gLogger.notice('-----------------------------------------------------------')
     gLogger.notice('')
     gLogger.notice('** Checking for unused Sites/CEs')
     gLogger.notice('--------------------------------')
-    #gLogger.notice('-----------------------------------------------------------')
     
     result = checkUnusedCEs(options.vo, options.domain)
     if not result['OK']:
@@ -339,11 +332,9 @@ if __name__ == '__main__':
         sys.exit(1)
     ceBdii = result['Value']
 
-    #gLogger.notice('-----------------------------------------------------------')
     gLogger.notice('')
     gLogger.notice('** Checking for unused Sites/SEs')
     gLogger.notice('--------------------------------')
-    #gLogger.notice('-----------------------------------------------------------')
 
     result = checkUnusedSEs(options.vo, options.domain)
     if not result['OK']:
@@ -356,22 +347,18 @@ if __name__ == '__main__':
     gLogger.notice('Fetching updated information for sites in CS from BDII...  ')
     gLogger.notice('-----------------------------------------------------------')
     
-    #gLogger.notice('-----------------------------------------------------------')
     gLogger.notice('')
     gLogger.notice('** Checking for updates in CS defined Sites/CEs')
     gLogger.notice('-----------------------------------------------')
-    #gLogger.notice('-----------------------------------------------------------')
 
     result = updateSites(options.vo, ceBdii)
     if not result['OK']:
         gLogger.error("Error while updating sites", result['Message'])
         sys.exit(1)
     
-    #gLogger.notice('-----------------------------------------------------------')
     gLogger.notice('')
     gLogger.notice('** Checking for updates in CS defined SEs')
     gLogger.notice('-----------------------------------------')
-    #gLogger.notice('-----------------------------------------------------------')
 
     result = updateSEs(options.vo)
     if not result['OK']:
