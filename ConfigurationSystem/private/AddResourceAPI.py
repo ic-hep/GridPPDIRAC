@@ -175,7 +175,6 @@ def checkUnusedCEs(vo, alternative_bdii=None,
         return S_ERROR('failed to get CEs from CS')
     knownCEs = result['Value']
 
-
     ## Now get from the BDII a list of ces that are not known i.e. new
     ceBdiiDict = None
     for host in alternative_bdii or []:
@@ -183,7 +182,7 @@ def checkUnusedCEs(vo, alternative_bdii=None,
         if result['OK']:
             ceBdiiDict = result['Value']
             break
-    result = getGridCEs(vo, bdiiInfo = ceBdiiDict, ceBlackList=knownCEs)
+    result = getGridCEs(vo, bdiiInfo=ceBdiiDict, ceBlackList=knownCEs)
     if not result['OK']:
         gLogger.error('ERROR: failed to get CEs from BDII', result['Message'])
         return S_ERROR('failed to get CEs from BDII')
@@ -255,7 +254,7 @@ def checkUnusedSEs(vo, alternative_bdii=None,
         if result['OK']:
             seBdiiDict = result['Value']
             break
-    
+
     result = getGridSRMs(vo, bdiiInfo=seBdiiDict, unUsed=True)
     if not result['OK']:
         gLogger.error('Failed to look up SRMs in BDII', result['Message'])
@@ -336,7 +335,7 @@ def checkUnusedSEs(vo, alternative_bdii=None,
             gLogger.notice('Successfully updated %s SE info in CS\n' % se)
 
     result = _updateCS(changeSet)
-    result['Value'] = seBdiiDict    
+    result['Value'] = seBdiiDict
     return result
 
 
