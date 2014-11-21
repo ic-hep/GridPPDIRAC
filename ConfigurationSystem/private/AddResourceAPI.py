@@ -14,6 +14,7 @@ from DIRAC.Core.Utilities.SitesDIRACGOCDBmapping import getDIRACSiteName
 from DIRAC.ConfigurationSystem.Client.CSAPI import CSAPI
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
 from DIRAC.Core.Utilities.Pfn import pfnparse
+from DIRAC.Core.Utilities.Grid import getBdiiCEInfo, getBdiiSEInfo
 from DIRAC.ConfigurationSystem.Client.Helpers.Registry import getVOs
 
 
@@ -133,11 +134,11 @@ def updateSites(vo, ceBdiiDict=None):
     return _updateCS(changeSet)
 
 
-def updateSEs(vo):
+def updateSEs(vo, seBdiiDict=None):
     '''
     update SEs
     '''
-    result = getSRMUpdates(vo)
+    result = getSRMUpdates(vo, bdiiInfo=seBdiiDict)
     if not result['OK']:
         gLogger.error('Failed to get SRM updates', result['Message'])
         return S_ERROR('Failed to get SRM updates')
@@ -145,12 +146,14 @@ def updateSEs(vo):
     return _updateCS(changeSet)
 
 
-def checkUnusedCEs(vo, domain='LCG', country_default='xx',
+def checkUnusedCEs(vo, alternative_bdii=None,
+                   domain='LCG', country_default='xx',
                    diracSiteTemplate='{domain}.{site}.{country}'):
     '''
     Check for unused CEs and add them where possible
 
     vo                - The VO
+    alternative_bdii  - None or a list of alternative BDII hosts
     domain            - The Grid domain used to generate
                         the DIRAC site name e.g. LCG
     country_default   - the default country code to use to substitute into
@@ -172,10 +175,15 @@ def checkUnusedCEs(vo, domain='LCG', country_default='xx',
         return S_ERROR('failed to get CEs from CS')
     knownCEs = result['Value']
 
-    ceBdiiDict = None
 
     ## Now get from the BDII a list of ces that are not known i.e. new
-    result = getGridCEs(vo, ceBlackList=knownCEs)
+    ceBdiiDict = None
+    for host in alternative_bdii or []:
+        result = getBdiiCEInfo(vo, host)
+        if result['OK']:
+            ceBdiiDict = result['Value']
+            break
+    result = getGridCEs(vo, bdiiInfo = ceBdiiDict, ceBlackList=knownCEs)
     if not result['OK']:
         gLogger.error('ERROR: failed to get CEs from BDII', result['Message'])
         return S_ERROR('failed to get CEs from BDII')
@@ -211,13 +219,15 @@ def checkUnusedCEs(vo, domain='LCG', country_default='xx',
     return result
 
 
-def checkUnusedSEs(vo, domain='LCG', country_default='xx',
+def checkUnusedSEs(vo, alternative_bdii=None,
+                   domain='LCG', country_default='xx',
                    diracSiteTemplate='{domain}.{site}.{country}',
                    diracSENameTemplate='{DIRACSiteName}-disk'):
     '''
     Check for unused SEs
 
-    vo                  - The VO
+    vo                - The VO
+    alternative_bdii  - None or a list of alternative BDII hosts
     domain            - The Grid domain used to generate
                         the DIRAC site name e.g. LCG
     country_default   - the default country code to use to substitute into
@@ -239,7 +249,14 @@ def checkUnusedSEs(vo, domain='LCG', country_default='xx',
                               {country}       - The country code e.g. uk,
                               {gridSE}        - The Grid SE name
     '''
-    result = getGridSRMs(vo, unUsed=True)
+    seBdiiDict = None
+    for host in alternative_bdii or []:
+        result = getBdiiSEInfo(vo, host)
+        if result['OK']:
+            seBdiiDict = result['Value']
+            break
+    
+    result = getGridSRMs(vo, bdiiInfo=seBdiiDict, unUsed=True)
     if not result['OK']:
         gLogger.error('Failed to look up SRMs in BDII', result['Message'])
         return S_ERROR('Failed to look up SRMs in BDII')
@@ -318,7 +335,9 @@ def checkUnusedSEs(vo, domain='LCG', country_default='xx',
 
             gLogger.notice('Successfully updated %s SE info in CS\n' % se)
 
-    return _updateCS(changeSet)
+    result = _updateCS(changeSet)
+    result['Value'] = seBdiiDict    
+    return result
 
 
 if __name__ == '__main__':
@@ -360,6 +379,7 @@ if __name__ == '__main__':
         gLogger.error("Error while running check for unused SEs:",
                       result['Message'])
         sys.exit(1)
+    seBdii = result['Value']
 
     gLogger.notice('')
     gLogger.notice('-------------------------------------------------------')
@@ -379,7 +399,7 @@ if __name__ == '__main__':
     gLogger.notice('** Checking for updates in CS defined SEs')
     gLogger.notice('-----------------------------------------')
 
-    result = updateSEs(options.vo)
+    result = updateSEs(options.vo, seBdii)
     if not result['OK']:
         gLogger.error("Error while updating SEs:", result['Message'])
         sys.exit(1)
