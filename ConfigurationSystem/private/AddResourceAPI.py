@@ -13,62 +13,27 @@ from DIRAC.ConfigurationSystem.Client.Utilities import (getGridCEs,
 from DIRAC.Core.Utilities.SitesDIRACGOCDBmapping import getDIRACSiteName
 from DIRAC.ConfigurationSystem.Client.CSAPI import CSAPI
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
-#from DIRAC.Core.Utilities.Grid import ldapService, getBdiiSEInfo
 from DIRAC.Core.Utilities.Pfn import pfnparse
 from DIRAC.ConfigurationSystem.Client.Helpers.Registry import getVOs
-#import code
+
 
 __all__ = ['checkUnusedCEs', 'checkUnusedSEs', 'updateSites', 'updateSEs']
 
-class configSet(set):
-    def add(self, section, option, new_value):
-        super(configSet, self).add((section,
-                                    option,
-                                    gConfig.getValue(cfgPath(section, option), None),
-                                    new_value))
 
-## Idea here is to allow it to properly exit if sites that have no new CEs are in list
-#def _siteDictFilter(siteDict):
-#    return {site: ces for site, ces in siteDict.iteritems() if not getDIRACSiteName(site)['OK'] or ces}
-
-
-def updateSites(vo, ceBdiiDict=None):
-    '''
-    update sites
-    '''
-    result = getSiteUpdates(vo, bdiiInfo=ceBdiiDict)
-    if not result['OK']:
-        gLogger.error('Failed to get site updates', result['Message'])
-        return S_ERROR('Failed to get site updates')
-    changeSet = result['Value']
-    return updateCS(changeSet)
-
-def updateSEs(vo):
-    '''
-    update SEs
-    '''
-    result = getSRMUpdates(vo)
-    if not result['OK']:
-        gLogger.error('Failed to get SRM updates', result['Message'])
-        return S_ERROR('Failed to get SRM updates')
-    changeSet = result['Value']
-    return updateCS(changeSet)
-
-
-def updateCS(changeSet):
+def _updateCS(changeSet):
     '''
     update CS
     '''
     if not len(changeSet):
         gLogger.notice('No changes required')
         return S_OK()
-           
+
     csAPI = CSAPI()
     csAPI.initialize()
     result = csAPI.downloadCSData()
     if not result['OK']:
-        gLogger.error('Failed to initialize CSAPI object', result['Message'])
-        return S_ERROR('Failed to initialize CSAPI object')
+        gLogger.error('Failed to initialise CSAPI object', result['Message'])
+        return S_ERROR('Failed to initialise CSAPI object')
 
     changeList = list(changeSet)
     changeList.sort()
@@ -91,23 +56,32 @@ def updateCS(changeSet):
     if not result['OK']:
         gLogger.error("Error while commit to CS", result['Message'])
         return S_ERROR("Error while commit to CS")
-    gLogger.notice("Successfully committed %d changes to CS\n" % len(changeSet))
+    gLogger.notice("Successfully committed %d changes to CS\n"
+                   % len(changeSet))
     return S_OK()
 
-def _getCountryCode(ces, default):
+
+def _getCountryCode(hosts, default):
     '''
-    Given a list of CEs try to determine the country code
+    Given a list of hosts try to determine the country code
     '''
-    for countryCode in (ce.strip().split('.')[-1].lower() for ce in ces):
+    for countryCode in (h.strip().split('.')[-1].lower() for h in hosts):
         if countryCode == 'gov':
             return 'us'
         if len(countryCode) == 2:
             return countryCode
     return default
 
-def _getUpdateDiracSiteName(site, domain, diracSiteTemplate, iterable, country_default, changeSet):
+
+def _getUpdateDiracSiteName(site, domain, diracSiteTemplate,
+                            iterable, country_default, changeSet):
+    '''
+    Return the DIRAC site name for a given site if it is known about in the CS.
+    If it is a new site then add it to the CS changeSet and return then new
+    DIRAC name built from the templates and country_default/host list iterable
+    '''
     result = getDIRACSiteName(site)
-    if result['OK'] and len(result['Value']) > 1:  # >1 DIRAC site for GOCBD site
+    if result['OK'] and len(result['Value']) > 1:  # >1 DIRAC name for site
         gLogger.notice('Attention! GOC site %s corresponds '
                        'to more than one DIRAC sites:' % site)
         gLogger.notice(str(result['Value']))
@@ -125,11 +99,53 @@ def _getUpdateDiracSiteName(site, domain, diracSiteTemplate, iterable, country_d
                                              site=site,
                                              country=country)
         gLogger.notice('The site %s is not yet in the CS, adding it as %s'
-                       % (site, diracSite)) 
-        changeSet.add("/Resources/Sites/%s/%s" % (domain, diracSite), 'Name', site)
+                       % (site, diracSite))
+        changeSet.add("/Resources/Sites/%s/%s"
+                      % (domain, diracSite), 'Name', site)
     return diracSite, changeSet
 
-def checkUnusedCEs(vo, domain, country_default='xx',
+
+class _configSet(set):
+    '''
+    Wrapper class around set to provide a nicer add syntax
+    and also to get the element in the form expected for _updateCS
+    '''
+    def add(self, section, option, new_value):
+        '''
+        Overrides base class add giving nicer syntax for our needs
+        '''
+        super(_configSet, self).add((section,
+                                    option,
+                                    gConfig.getValue(cfgPath(section, option),
+                                                     None),
+                                    new_value))
+
+
+def updateSites(vo, ceBdiiDict=None):
+    '''
+    update sites
+    '''
+    result = getSiteUpdates(vo, bdiiInfo=ceBdiiDict)
+    if not result['OK']:
+        gLogger.error('Failed to get site updates', result['Message'])
+        return S_ERROR('Failed to get site updates')
+    changeSet = result['Value']
+    return _updateCS(changeSet)
+
+
+def updateSEs(vo):
+    '''
+    update SEs
+    '''
+    result = getSRMUpdates(vo)
+    if not result['OK']:
+        gLogger.error('Failed to get SRM updates', result['Message'])
+        return S_ERROR('Failed to get SRM updates')
+    changeSet = result['Value']
+    return _updateCS(changeSet)
+
+
+def checkUnusedCEs(vo, domain='LCG', country_default='xx',
                    diracSiteTemplate='{domain}.{site}.{country}'):
     '''
     Check for unused CEs and add them where possible
@@ -173,7 +189,7 @@ def checkUnusedCEs(vo, domain, country_default='xx',
 
     ## now add the new resources
     cfgBase = "/Resources/Sites/%s" % domain
-    changeSet = configSet()
+    changeSet = _configSet()
     for site, ces in siteDict.iteritems():
         diracSite, changeSet = _getUpdateDiracSiteName(site,
                                                        domain,
@@ -187,12 +203,13 @@ def checkUnusedCEs(vo, domain, country_default='xx',
         if ces:
             CSExistingCEs = set(gConfig.getValue("%s/CE" % sitePath, []))
             gLogger.notice("New CE resource(s) detected at %s(%s): %s\n"
-                           % (site, diracSite, ','.join(ces)))   
+                           % (site, diracSite, ','.join(ces)))
             changeSet.add(sitePath, 'CE', ','.join(CSExistingCEs | set(ces)))
 
-    result = updateCS(changeSet)
+    result = _updateCS(changeSet)
     result['Value'] = ceBdiiDict
     return result
+
 
 def checkUnusedSEs(vo, domain='LCG', country_default='xx',
                    diracSiteTemplate='{domain}.{site}.{country}',
@@ -235,7 +252,7 @@ def checkUnusedSEs(vo, domain='LCG', country_default='xx',
     else:
         csVOs = set([vo])
 
-    changeSet = configSet()
+    changeSet = _configSet()
     cfgBase = '/Resources/StorageElements'
     for site, ses in siteSRMDict.iteritems():
         diracSite, changeSet = _getUpdateDiracSiteName(site,
@@ -246,7 +263,7 @@ def checkUnusedSEs(vo, domain='LCG', country_default='xx',
                                                        changeSet)
         if diracSite is None:
             continue
-        
+
         for se, se_info in ses.iteritems():
             seDict = se_info['SE']
             srmDict = se_info['SRM']
@@ -256,7 +273,7 @@ def checkUnusedSEs(vo, domain='LCG', country_default='xx',
             if not (version and version.startswith('2')):
                 gLogger.debug('Skipping SRM service with version %s' % version)
                 continue
-            
+
             result = pfnparse(srmDict.get('GlueServiceEndpoint', ''))
             if not result['OK']:
                 gLogger.error('Can not get the SRM service end point. '
@@ -273,8 +290,7 @@ def checkUnusedSEs(vo, domain='LCG', country_default='xx',
             seVOs = csVOs.intersection(bdiiVOs)
             backend_type = seDict.get('GlueSEImplementationName', 'Unknown')
             description = seDict.get('GlueSEName', 'Unknown')
-            
-                        
+
             siteDomain, siteName, siteCountry = diracSite.split('.')
             diracSEName = diracSENameTemplate.format(domain=siteDomain,
                                                      DIRACSiteName=siteName,
@@ -282,9 +298,12 @@ def checkUnusedSEs(vo, domain='LCG', country_default='xx',
                                                      girdSE=se)
             gLogger.notice('Adding new SE %s with DIRAC name %s at site %s'
                            % (se, diracSEName, diracSite))
-            
+
+            # Create the CS paths
             seSection = cfgPath(cfgBase, diracSEName)
             accessSection = cfgPath(seSection, 'AccessProtocol.1')
+
+            # Add the changes
             changeSet.add(seSection, 'BackendType', backend_type)
             changeSet.add(seSection, 'Description', description)
             changeSet.add(seSection, 'VO', ','.join(seVOs))
@@ -298,8 +317,8 @@ def checkUnusedSEs(vo, domain='LCG', country_default='xx',
             changeSet.add(accessSection, 'WSUrl', '/srm/managerv2?SFN=')
 
             gLogger.notice('Successfully updated %s SE info in CS\n' % se)
-   
-    return updateCS(changeSet)
+
+    return _updateCS(changeSet)
 
 
 if __name__ == '__main__':
@@ -317,14 +336,14 @@ if __name__ == '__main__':
 
     (options, args) = parser.parse_args()
 
-    gLogger.notice('-----------------------------------------------------------')
-    gLogger.notice('looking for new computing resources in the BDII database...')
-    gLogger.notice('-----------------------------------------------------------')
-    
+    gLogger.notice('-------------------------------------------------------')
+    gLogger.notice('looking for new computing resources in BDII database...')
+    gLogger.notice('-------------------------------------------------------')
+
     gLogger.notice('')
     gLogger.notice('** Checking for unused Sites/CEs')
     gLogger.notice('--------------------------------')
-    
+
     result = checkUnusedCEs(options.vo, options.domain)
     if not result['OK']:
         gLogger.error("Error while running check for unused CEs",
@@ -341,12 +360,12 @@ if __name__ == '__main__':
         gLogger.error("Error while running check for unused SEs:",
                       result['Message'])
         sys.exit(1)
-    
+
     gLogger.notice('')
-    gLogger.notice('-----------------------------------------------------------')
-    gLogger.notice('Fetching updated information for sites in CS from BDII...  ')
-    gLogger.notice('-----------------------------------------------------------')
-    
+    gLogger.notice('-------------------------------------------------------')
+    gLogger.notice('Fetching updated info for sites in CS from BDII...     ')
+    gLogger.notice('-------------------------------------------------------')
+
     gLogger.notice('')
     gLogger.notice('** Checking for updates in CS defined Sites/CEs')
     gLogger.notice('-----------------------------------------------')
@@ -355,7 +374,7 @@ if __name__ == '__main__':
     if not result['OK']:
         gLogger.error("Error while updating sites", result['Message'])
         sys.exit(1)
-    
+
     gLogger.notice('')
     gLogger.notice('** Checking for updates in CS defined SEs')
     gLogger.notice('-----------------------------------------')
