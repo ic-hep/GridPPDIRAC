@@ -15,10 +15,10 @@ __RCSID__ = "$Id$"
 
 from DIRAC import S_OK
 from DIRAC.ConfigurationSystem.Agent.Bdii2CSAgent import Bdii2CSAgent
-from DIRAC.ConfigurationSystem.private.AddResourceAPI import (checkUnusedCEs,
-                                                              checkUnusedSEs,
-                                                              updateSites,
-                                                              updateSEs)
+from GridPPDIRAC.ConfigurationSystem.private.AddResourceAPI import (checkUnusedCEs,
+                                                                    checkUnusedSEs,
+                                                                    updateSites,
+                                                                    updateSEs)
 
 
 class AutoBdii2CSAgent(Bdii2CSAgent):
