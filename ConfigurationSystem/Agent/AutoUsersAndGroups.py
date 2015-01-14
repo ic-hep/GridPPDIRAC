@@ -320,7 +320,7 @@ class AutoUsersAndGroups(UsersAndGroups):
             self.log.fatal( 'Could not retrieve current User description' )
             return ret
         currentUsers = ret['Value']
-        currentUsersDN = {user['DN']: user_nick for user_nick, user in currentUsers.iteritems()}
+        currentUsersDN = dict(((user['DN'], user_nick) for user_nick, user in currentUsers.iteritems()))
 #        self.__adminMsgs[ 'Info' ].append( "There are %s registered users in DIRAC" % len( currentUsers ) )
         self.log.info( "There are %s registered users in DIRAC" % len( currentUsers ) )
         vomsRoles = {}
