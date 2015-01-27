@@ -12,8 +12,8 @@ class MultiVOMSService:
         result = gConfig.getSections('/Registry/VOMS/URLs')
         if not result['OK']:
             raise Exception
-        vos = result['Value']
-        for vo in vos:
+        self.__vos = result['Value']
+        for vo in self.__vos:
             url_dict = gConfig.getOptionsDict('/Registry/VOMS/URLs/%s' % vo)
             if 'VOMSAdmin' not in url_dict:
                 gLogger.error("Skipping setting up VOMSService for VO: %s as no VOMSAdmin option in config" % vo)
@@ -35,12 +35,13 @@ class MultiVOMSService:
                     retries-=1
             else:
                 gLogger.error("Maximum number of retries reached. Skipping setting up VOMSService for VO: %s" % vo)
+
+    @property
+    def vos(self):
+        return self.__vos
             
-    def getKnownVOs(self):
-        result = gConfig.getSections('/Registry/VOMS/URLs')
-        if not result['OK']:
-            raise Exception
-        return result['Value']
+#    def getKnownVOs(self):
+#        return self.__vos
 
     def admListMembers(self, vo):
         try:
