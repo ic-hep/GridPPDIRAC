@@ -64,7 +64,7 @@ class UsersAndGroupsAPI(object):
         for vo in self._vomsSrv.vos:
             ## Users
             ################################################################
-            result = self.vomsSrv.admListMembers(vo)
+            result = self._vomsSrv.admListMembers(vo)
             if not result['OK']:
                 self.log.fatal( 'Could not retrieve registered user entries in VOMS for VO %s' % vo )
                 continue
@@ -89,7 +89,7 @@ class UsersAndGroupsAPI(object):
             
             ## Groups
             ################################################################
-            result = self.vomsSrv.admGetVOName(vo)
+            result = self._vomsSrv.admGetVOName(vo)
             if not result['OK']:
                 self.log.fatal( 'Could not retrieve VOMS VO name for vo %s'% vo )
                 continue
@@ -97,7 +97,7 @@ class UsersAndGroupsAPI(object):
                 
             groups = {'%s_user' % voNameInVOMS.strip('/') : set(self.dirac_names(usersInVOMS)) }
             
-            result = self.vomsSrv.admListRoles(vo)
+            result = self._vomsSrv.admListRoles(vo)
             if not result['OK']:
                 self.log.fatal( 'Could not retrieve registered roles in VOMS for vo' % vo )
                 continue
@@ -109,7 +109,7 @@ class UsersAndGroupsAPI(object):
                     gLogger.error("Couldn't find DIRAC group for role %s" % role)
                     continue
 
-                result = self.vomsSrv.admListUsersWithRole( vo, voNameInVOMS, role )
+                result = self._vomsSrv.admListUsersWithRole( vo, voNameInVOMS, role )
                 if not result[ 'OK' ]:
                     gLogger.error("Couldn't list users with role %s" % role)
                     continue
