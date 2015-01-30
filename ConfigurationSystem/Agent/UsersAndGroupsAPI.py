@@ -48,7 +48,7 @@ class UsersAndGroupsAPI(object):
             gLogger.error('User has no CN field in DN')
             return None
         if len(cnmatches) > 1:
-            gLogger.warning('User has more than one CN field in DN, using first...')
+            gLogger.warn('User has more than one CN field in DN, using first...')
         # convert to lower case, remove any non [a-z_ ] chars and replace ' ' with '.'
         return cn_sanitiser.sub('', cnmatches[0].lower()).replace(' ','.')
         
@@ -59,7 +59,7 @@ class UsersAndGroupsAPI(object):
             return result
         vomsMapping = {v:k for k, v in result['Value'].iteritems()}
 
-        usersInVoms = {}
+        usersInVOMS = {}
         groups = {}
         for vo in self._vomsSrv.vos:
             ## Users
@@ -70,7 +70,7 @@ class UsersAndGroupsAPI(object):
                 continue
             for user in result['Value']:
                 if user.get('DN') not in usersInVOMS:
-                    user_nick = dirac_user(user)
+                    user_nick = self.dirac_user(user)
                     if user_nick in self.dirac_names(usersInVOMS):
                         user_nick += str(len([u for u in self.dirac_names(usersInVOMS, matchstart=user_nick)]))
                         if user_nick in self.dirac_names(usersInVOMS):
