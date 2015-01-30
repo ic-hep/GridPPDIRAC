@@ -1,6 +1,7 @@
 import os
 import re
 from DIRACGridPP.Core.Security.MultiVOMSService import MultiVOMSService
+from DIRAC import gConfig, gLogger
 r = re.compile('(?P<group>.*)/(?P<role>Role=.*)')
 cn_sanitiser = re.compile('[^a-z_ ]')
 cn_regex=re.compile('/CN=(?P<cn>[^/]*)')
@@ -39,15 +40,15 @@ class UsersAndGroupsAPI(object):
     def dirac_user(self, user):
         dn = user.get('DN')
         if not dn:
-            logger.error('User has no DN')
+            gLogger.error('User has no DN')
             return None
         
         cnmatches = cn_regex.findall(dn)
         if len(cnmatches) == 0:
-            logger.error('User has no CN field in DN')
+            gLogger.error('User has no CN field in DN')
             return None
         if len(cnmatches) > 1:
-            logger.warning('User has more than one CN field in DN, using first...')
+            gLogger.warning('User has more than one CN field in DN, using first...')
         # convert to lower case, remove any non [a-z_ ] chars and replace ' ' with '.'
         return cn_sanitiser.sub('', cnmatches[0].lower()).replace(' ','.')
         
@@ -73,10 +74,10 @@ class UsersAndGroupsAPI(object):
                     if user_nick in self.dirac_names(usersInVOMS):
                         user_nick += str(len([u for u in self.dirac_names(usersInVOMS, matchstart=user_nick)]))
                         if user_nick in self.dirac_names(usersInVOMS):
-                            logger.error("Can't form a unique nick name for user %s, skipping user..." % user['DN'])
+                            gLogger.error("Can't form a unique nick name for user %s, skipping user..." % user['DN'])
                             continue
                     if not user_nick:
-                        logger.error( "Empty nickname for DN %s, skipping user..." % user[ 'DN' ] )
+                        gLogger.error( "Empty nickname for DN %s, skipping user..." % user[ 'DN' ] )
                         continue
                     user['DiracName'] = user_nick
                     
@@ -105,12 +106,12 @@ class UsersAndGroupsAPI(object):
             for role in rolesInVOMS:
                 dirac_group = vomsMapping.get(os.path.join(voNameInVOMS, role))
                 if not dirac_group:
-                    logger.error("Couldn't find DIRAC group for role %s" % role)
+                    gLogger.error("Couldn't find DIRAC group for role %s" % role)
                     continue
 
                 result = self.vomsSrv.admListUsersWithRole( vo, voNameInVOMS, role )
                 if not result[ 'OK' ]:
-                    logger.error("Couldn't list users with role %s" % role)
+                    gLogger.error("Couldn't list users with role %s" % role)
                     continue
                 groups[dirac_group] = set((usersInVOMS[groupUser['DN']]['DiracName']
                                            for groupUser in result['Value']

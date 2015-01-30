@@ -14,7 +14,11 @@ class MultiVOMSService:
             raise Exception
         self.__vos = result['Value']
         for vo in self.__vos:
-            url_dict = gConfig.getOptionsDict('/Registry/VOMS/URLs/%s' % vo)
+            result = gConfig.getOptionsDict('/Registry/VOMS/URLs/%s' % vo)
+            if not result['OK']:
+                glogger.error(result['Message'])
+                continue
+            url_dict = result['Value']
             if 'VOMSAdmin' not in url_dict:
                 gLogger.error("Skipping setting up VOMSService for VO: %s as no VOMSAdmin option in config" % vo)
                 continue
