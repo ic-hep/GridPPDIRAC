@@ -120,8 +120,7 @@ class UsersAndGroupsAPI(object):
         ## End of vo loop
         ###################################################################
         
-        print usersInVOMS
-        return
+
         ## Updating CS
         ###################################################################
         csapi = CSAPI()
@@ -137,7 +136,20 @@ class UsersAndGroupsAPI(object):
                         if user['DN'] and user.setdefault('DiracName', user_nick)}
         
         obsoleteUsers = set(self.dirac_names(currentUsers)) - set(self.dirac_names(usersInVOMS))
-        
+        if obsoleteUsers:
+            csapi.deleteUsers(obsoleteUsers)
+            
+        for user in usersInVOMS.itervalues():
+            user_nick = user.pop('DiracName', None)
+            if not user_nick:
+                continue
+            user['Email'] = ','.join(user.get('Email', ''))
+            result = csapi.modifyUser(user_nick, user, createIfNonExistant = True)
+            if not result[ 'OK' ]:
+                gLogger.error( "Cannot modify user %s, DN: %s" % (user_nick, user.get('DN')))
+                continue
+            
+
 if __name__ == '__main__':
     u=UsersAndGroupsAPI()
     u.something()
