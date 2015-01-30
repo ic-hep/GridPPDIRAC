@@ -55,7 +55,7 @@ class UsersAndGroupsAPI(object):
     def something(self):
         result = gConfig.getOptionsDict('/Registry/VOMS/Mapping')
         if not result['OK']:
-            self.log.fatal( 'No VOMS to DIRAC Group Mapping Available' )
+            gLogger.fatal( 'No VOMS to DIRAC Group Mapping Available' )
             return result
         vomsMapping = {v:k for k, v in result['Value'].iteritems()}
 
@@ -66,7 +66,7 @@ class UsersAndGroupsAPI(object):
             ################################################################
             result = self._vomsSrv.admListMembers(vo)
             if not result['OK']:
-                self.log.fatal( 'Could not retrieve registered user entries in VOMS for VO %s' % vo )
+                gLogger.fatal( 'Could not retrieve registered user entries in VOMS for VO %s' % vo )
                 continue
             for user in result['Value']:
                 if user.get('DN') not in usersInVOMS:
@@ -91,7 +91,7 @@ class UsersAndGroupsAPI(object):
             ################################################################
             result = self._vomsSrv.admGetVOName(vo)
             if not result['OK']:
-                self.log.fatal( 'Could not retrieve VOMS VO name for vo %s'% vo )
+                gLogger.fatal( 'Could not retrieve VOMS VO name for vo %s'% vo )
                 continue
             voNameInVOMS = result[ 'Value' ]
                 
@@ -99,7 +99,7 @@ class UsersAndGroupsAPI(object):
             
             result = self._vomsSrv.admListRoles(vo)
             if not result['OK']:
-                self.log.fatal( 'Could not retrieve registered roles in VOMS for vo' % vo )
+                gLogger.fatal( 'Could not retrieve registered roles in VOMS for vo' % vo )
                 continue
             rolesInVOMS = (role for role in result[ 'Value' ] if role)
             
@@ -126,11 +126,11 @@ class UsersAndGroupsAPI(object):
         csapi = CSAPI()
         ret = csapi.listUsers()
         if not ret['OK']:
-            self.log.fatal( 'Could not retrieve current list of Users' )
+            gLogger.fatal( 'Could not retrieve current list of Users' )
             return ret
         ret = csapi.describeUsers( ret['Value'] )
         if not ret['OK']:
-            self.log.fatal( 'Could not retrieve current User description' )
+            gLogger.fatal( 'Could not retrieve current User description' )
             return ret
         currentUsers = {user['DN']: user for user_nick, user in ret['Value'].iteritems()
                         if user['DN'] and user.setdefault('DiracName', user_nick)}
