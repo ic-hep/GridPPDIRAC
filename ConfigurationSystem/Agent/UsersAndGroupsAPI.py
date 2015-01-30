@@ -1,6 +1,6 @@
 import os
 import re
-from DIRACGridPP.Core.Security.MultiVOMSService import MultiVOMSService
+from GridPPDIRAC.Core.Security.MultiVOMSService import MultiVOMSService
 from DIRAC import gConfig, gLogger
 r = re.compile('(?P<group>.*)/(?P<role>Role=.*)')
 cn_sanitiser = re.compile('[^a-z_ ]')
