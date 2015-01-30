@@ -11,7 +11,7 @@ class MultiVOMSService:
         self.__soapClients = {}#'LHCb': VOURL(adminUrl, attributesUrl)}
         result = gConfig.getSections('/Registry/VOMS/URLs')
         if not result['OK']:
-            raise Exception
+            raise Exception(result['Message'])
         self.__vos = result['Value']
         for vo in self.__vos:
             result = gConfig.getOptionsDict('/Registry/VOMS/URLs/%s' % vo)
