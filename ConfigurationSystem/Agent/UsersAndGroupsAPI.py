@@ -1,7 +1,8 @@
 import os
 import re
-from GridPPDIRAC.Core.Security.MultiVOMSService import MultiVOMSService
 from DIRAC import gConfig, gLogger
+from DIRAC.ConfigurationSystem.Client.CSAPI import CSAPI
+from GridPPDIRAC.Core.Security.MultiVOMSService import MultiVOMSService
 r = re.compile('(?P<group>.*)/(?P<role>Role=.*)')
 cn_sanitiser = re.compile('[^a-z_ ]')
 cn_regex=re.compile('/CN=(?P<cn>[^/]*)')
@@ -57,7 +58,7 @@ class UsersAndGroupsAPI(object):
         if not result['OK']:
             gLogger.fatal( 'No VOMS to DIRAC Group Mapping Available' )
             return result
-        vomsMapping = {v:k for k, v in result['Value'].iteritems()}
+        vomsMapping = dict(((v,k) for k, v in result['Value'].iteritems()))
 
         usersInVOMS = {}
         groups = {}
@@ -116,6 +117,7 @@ class UsersAndGroupsAPI(object):
                 groups[dirac_group] = set((usersInVOMS[groupUser['DN']]['DiracName']
                                            for groupUser in result['Value']
                                            if groupUser['DN'] in usersInVOMS))
+                                           #and usersInVOMS[groupUser['DN']].setdefault('Groups',set()).add(dirac_group)))
                 
         ## End of vo loop
         ###################################################################
@@ -132,8 +134,8 @@ class UsersAndGroupsAPI(object):
         if not ret['OK']:
             gLogger.fatal( 'Could not retrieve current User description' )
             return ret
-        currentUsers = {user['DN']: user for user_nick, user in ret['Value'].iteritems()
-                        if user['DN'] and user.setdefault('DiracName', user_nick)}
+        currentUsers = dict(((user['DN'], user) for user_nick, user in ret['Value'].iteritems()
+                             if user['DN'] and user.setdefault('DiracName', user_nick)))
         
         obsoleteUsers = set(self.dirac_names(currentUsers)) - set(self.dirac_names(usersInVOMS))
         if obsoleteUsers:
