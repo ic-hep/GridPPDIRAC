@@ -48,9 +48,9 @@ class UsersAndGroupsAPI(object):
             gLogger.error('User has no CN field in DN')
             return None
         if len(cnmatches) > 1:
-            gLogger.warn('User has more than one CN field in DN, using first...')
+            gLogger.warn('User has more than one CN field in DN, using last...')  # CERN DNs have multiple CN fields (AFS UID, UID No., Name field)
         # convert to lower case, remove any non [a-z_ ] chars and replace ' ' with '.'
-        return cn_sanitiser.sub('', cnmatches[0].lower()).replace(' ','.')
+        return cn_sanitiser.sub('', cnmatches[-1].lower()).replace(' ','.')
         
     def something(self):
         result = gConfig.getOptionsDict('/Registry/VOMS/Mapping')
