@@ -50,8 +50,9 @@ class UsersAndGroupsAPI(object):
             return None
         if len(cnmatches) > 1:
             gLogger.warn('User has more than one CN field in DN, using last...')  # CERN DNs have multiple CN fields (AFS UID, UID No., Name field)
-        # convert to lower case, remove any non [a-z_ ] chars and replace ' ' with '.'
-        return cn_sanitiser.sub('', cnmatches[-1].lower()).replace(' ','.')
+        # convert to lower case, remove any non [a-z_ ] chars, strip leading and
+        # trailing spaces and replace remaining ' ' with '.'
+        return cn_sanitiser.sub('', cnmatches[-1].strip().lower()).replace(' ','.')
         
     def something(self):
         result = gConfig.getOptionsDict('/Registry/VOMS/Mapping')
@@ -97,7 +98,9 @@ class UsersAndGroupsAPI(object):
             voNameInVOMS = result[ 'Value' ]
                 
             groups = {'%s_user' % voNameInVOMS.strip('/') : set(self.dirac_names(usersInVOMS)) }
-            
+            #default_group = '%s_user' % voNameInVOMS.strip('/')
+            #groups = {default_group : set(( u['DiracName'] for u in usersInVOMS if u.get('DiracName') and u.setdefualt('Groups',set()).add(default_group))) }
+
             result = self._vomsSrv.admListRoles(vo)
             if not result['OK']:
                 gLogger.fatal( 'Could not retrieve registered roles in VOMS for vo' % vo )
@@ -151,6 +154,11 @@ class UsersAndGroupsAPI(object):
                 gLogger.error( "Cannot modify user %s, DN: %s" % (user_nick, user.get('DN')))
                 continue
             
+        result = csapi.commitChanges()
+        if not result[ 'OK' ]:
+            gLogger.error( "Could not commit configuration changes", result[ 'Message' ] )
+            return result
+        gLogger.info( "Configuration committed" )
 
 if __name__ == '__main__':
     ## for some reason config not loaded properly
