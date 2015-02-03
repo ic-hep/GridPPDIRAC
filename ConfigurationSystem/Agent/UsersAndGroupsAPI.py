@@ -6,39 +6,60 @@ from GridPPDIRAC.Core.Security.MultiVOMSService import MultiVOMSService
 r = re.compile('(?P<group>.*)/(?P<role>Role=.*)')
 cn_sanitiser = re.compile('[^a-z_ ]')
 cn_regex=re.compile('/CN=(?P<cn>[^/]*)')
+index=re.compile('.*?[a-z_](?P<index>[0-9]*?)\Z')
+class DiracUsers(dict):
+    @property
+    def DiracNames(self):
+        return (user['DiracName'] for user in self.itervalues() if 'DiracName' in user)
+    
+#    def DiracNameMatches(self, matchstart=''):
+#        return [dirac_name for dirac_name in self.DiracNames if dirac_name.startswith(matchstart)]
+    
+    def countDiracNameMatches(self, matchstart=''):
+        c=0
+        for user in self.DiracNames:
+            if user.startswith(matchstart):
+                c+=1
+        return c
+#    def add_user(self, user):
+#        count=0
+#        user['DiracName'] = dirac_name(user)
+#        r = re.compile('%s(?P<index>[0-9]*?)\Z' % user['DiracName'])
+#        for u in self.itervalues():
+#            match = r.search(u['DiracName'])
+#            if match:
+#                m = int(match.group('index') or 0)  # or 0 catches the case with no numbers
+#                if m > count:
+#                    count = m
+#        if count:
+#            user['DiracName'] += str(count)
+#        super(DiracUser, self).__setitem__(user['DN'], user)
+#    
+#    def update(self, other=()):
+#        gen = ((dn, u) for dn, u in others.iteritems() if u.get('DN') and u.setdefault('DiracName', dirac_name(value['DN'])))
+#        return super(DiracUsers, self).update(gen)
+#    
+#    def setdefault(self, name, value=None):
+#        if not isinstance(value, dict):
+#            gLogger.error('Only dict type allowed for user entry')
+#        if not value.get('DN'):
+#            gLogger.warn()
+#        value.setdefault('DiracName', dirac_name(value['DN']))
+#        return super(DiracUsers, self).setdefault(name, value)
+#    
+#    def __setitem__(self, name, value):
+#        if not value.get('DN'):
+#            gLogger.warn()
+#            return None
+#        value.setdefault('DiracName', dirac_name(value['DN']))
+#        return super(DiracUsers, self).__setitem__(name, value)
+
+
 class UsersAndGroupsAPI(object):
     def __init__(self):
         self._vomsSrv = MultiVOMSService()
-        
-    def dirac_names(self, usersDict, matchstart=''):
-        for user in usersDict.itervalues():
-            if 'DiracName' in user and user['DiracName'].startswith(matchstart):
-                yield user['DiracName']
-        
-#    def users_dict(self, usersList):
-#        usersInVOMS={}
-#        for user in usersList:
-#            if user.get('DN') not in usersInVOMS:
-#                user_nick = dirac_user(user)
-#                if user_nick in self.dirac_names(usersInVOMS):
-#                    user_nick += str(len([u for u in self.dirac_names(usersInVOMS, matchstart=user_nick)]))
-#                    if user_nick in self.dirac_names(usersInVOMS):
-#                        logger.error("Can't form a unique nick name for user %s, skipping user..." % user['DN'])
-#                        continue
-#                if not user_nick:
-#                    logger.error( "Empty nickname for DN %s, skipping user..." % user[ 'DN' ] )
-#                    continue
-#                user['DiracName'] = user_nick
-#                
-#            mail = user.pop('mail', None)
-#            if not mail:  # Catches '' and [] as well as None
-#                continue
-#            usersInVOMS.setdefault(user['DN'], user)\
-#                       .setdefault('Email', set())\
-#                       .add(mail)
-#        return usersInVOMS
 
-    def dirac_user(self, user):
+    def _dirac_username(self, user):
         dn = user.get('DN')
         if not dn:
             gLogger.error('User has no DN')
@@ -54,80 +75,97 @@ class UsersAndGroupsAPI(object):
         # trailing spaces and replace remaining ' ' with '.'
         return cn_sanitiser.sub('', cnmatches[-1].strip().lower()).replace(' ','.')
         
-    def something(self):
+    def update_usersandgroups(self):
         result = gConfig.getOptionsDict('/Registry/VOMS/Mapping')
         if not result['OK']:
-            gLogger.fatal( 'No VOMS to DIRAC Group Mapping Available' )
+            gLogger.fatal( 'No DIRAC group to VOMS role mapping available' )
+            gLogger.fatal( 'Please add options to CS /Registry/VOMS/Mapping like...' )
+            gLogger.fatal( '        <vo>_user  = /<vo>' )
+            gLogger.fatal( '        <vo>_admin = /<vo>/Role=admin' )
             return result
         vomsMapping = dict(((v,k) for k, v in result['Value'].iteritems()))
 
-        usersInVOMS = {}
-        groups = {}
+        ## Main VO loop
+        usersInVOMS = DiracUsers()
         for vo in self._vomsSrv.vos:
+            ## Get the VO name from VOMS
+            result = self._vomsSrv.admGetVOName(vo)
+            if not result['OK']:
+                gLogger.warn( 'Could not retrieve VOMS VO name for vo %s, skipping...'% vo )
+                continue
+            voNameInVOMS = result[ 'Value' ]
+
+            ## Get the default DIRAC user group name from the VOMS role mapping 
+            default_group = vomsMapping.get(voNameInVOMS)
+            if not default_group:
+                gLogger.warn('No default group for vo %s in mapping /Registry/VOMS/Mapping,'
+                             'expected something like %s_user = %s'
+                             % (voNameInVOMS, voNameInVOMS.strip('/'), voNameInVOMS))
+                
             ## Users
             ################################################################
             result = self._vomsSrv.admListMembers(vo)
             if not result['OK']:
-                gLogger.fatal( 'Could not retrieve registered user entries in VOMS for VO %s' % vo )
+                gLogger.warn( 'Could not retrieve registered user entries in VOMS for VO %s, skipping...' % vo )
                 continue
             for user in result['Value']:
-                if user.get('DN') not in usersInVOMS:
-                    user_nick = self.dirac_user(user)
-                    if user_nick in self.dirac_names(usersInVOMS):
-                        user_nick += str(len([u for u in self.dirac_names(usersInVOMS, matchstart=user_nick)]))
-                        if user_nick in self.dirac_names(usersInVOMS):
-                            gLogger.error("Can't form a unique nick name for user %s, skipping user..." % user['DN'])
-                            continue
+                ## New user check
+                if not usersInVOMS.get(user['DN']):
+                    user_nick = self._dirac_username(user)
                     if not user_nick:
                         gLogger.error( "Empty nickname for DN %s, skipping user..." % user[ 'DN' ] )
                         continue
+                    ## mangle user nickname if it already exists
+                    if user_nick in usersInVOMS.DiracNames:
+                        user_nick += str(usersInVOMS.countDiracNameMatches(user_nick))
+                        if user_nick in usersInVOMS.DiracNames:
+                            gLogger.error("Can't form a unique nick name for user %s, skipping user..." % user['DN'])
+                            continue
                     user['DiracName'] = user_nick
-                    
+
+                ## all users
                 mail = user.pop('mail', None)
                 if mail:  # Catches '' and [] as well as None
                     usersInVOMS.setdefault(user['DN'], user)\
                                .setdefault('Email', set())\
                                .add(mail)
-            
+                if default_group:
+                    usersInVOMS.setdefault(user['DN'], user)\
+                               .setdefault('Groups', set())\
+                               .add(default_group)
+                               
+                               
             ## Groups
             ################################################################
-            result = self._vomsSrv.admGetVOName(vo)
-            if not result['OK']:
-                gLogger.fatal( 'Could not retrieve VOMS VO name for vo %s'% vo )
-                continue
-            voNameInVOMS = result[ 'Value' ]
-                
-            groups = {'%s_user' % voNameInVOMS.strip('/') : set(self.dirac_names(usersInVOMS)) }
-            #default_group = '%s_user' % voNameInVOMS.strip('/')
-            #groups = {default_group : set(( u['DiracName'] for u in usersInVOMS if u.get('DiracName') and u.setdefualt('Groups',set()).add(default_group))) }
-
             result = self._vomsSrv.admListRoles(vo)
             if not result['OK']:
-                gLogger.fatal( 'Could not retrieve registered roles in VOMS for vo' % vo )
-                continue
+                gLogger.warn( 'Could not retrieve registered roles in VOMS for vo' % vo )
+                gLogger.warn( 'Will proceed to add users to any default defined groups.' )
+                result['Value'] = ()
             rolesInVOMS = (role for role in result[ 'Value' ] if role)
-            
-            for role in rolesInVOMS:
+                        
+            for  role in rolesInVOMS:
                 dirac_group = vomsMapping.get(os.path.join(voNameInVOMS, role))
                 if not dirac_group:
-                    gLogger.error("Couldn't find DIRAC group for role %s" % role)
+                    gLogger.error("Couldn't find DIRAC group for role %s in mapping /Registry/VOMS/Mapping, skipping..." % role)
                     continue
-
+                
                 result = self._vomsSrv.admListUsersWithRole( vo, voNameInVOMS, role )
                 if not result[ 'OK' ]:
-                    gLogger.error("Couldn't list users with role %s" % role)
+                    gLogger.error("Couldn't list users with role %s, skipping" % role)
                     continue
-                groups[dirac_group] = set((usersInVOMS[groupUser['DN']]['DiracName']
-                                           for groupUser in result['Value']
-                                           if groupUser['DN'] in usersInVOMS))
-                                           #and usersInVOMS[groupUser['DN']].setdefault('Groups',set()).add(dirac_group)))
-                
+                for groupuser in result['Value']:
+                    if groupuser['DN'] in usersInVOMS:
+                        usersInVOMS[groupuser['DN']].setdefault('Groups', set())\
+                                                    .add(dirac_group)
+
         ## End of vo loop
         ###################################################################
         
 
         ## Updating CS
         ###################################################################
+        gLogger.info("Updating CS with changes/new entries...")
         csapi = CSAPI()
         ret = csapi.listUsers()
         if not ret['OK']:
@@ -137,21 +175,24 @@ class UsersAndGroupsAPI(object):
         if not ret['OK']:
             gLogger.fatal( 'Could not retrieve current User description' )
             return ret
-        currentUsers = dict(((user['DN'], user) for user_nick, user in ret['Value'].iteritems()
-                             if user['DN'] and user.setdefault('DiracName', user_nick)))
+        currentUsers = ret['Value']
         
-        obsoleteUsers = set(self.dirac_names(currentUsers)) - set(self.dirac_names(usersInVOMS))
+        obsoleteUsers = set(currentUsers) - set(usersInVOMS.DiracNames)
         if obsoleteUsers:
+            gLogger.info("Deleting obsolete users: %s" % obsoleteUsers)
             csapi.deleteUsers(obsoleteUsers)
             
         for user in usersInVOMS.itervalues():
             user_nick = user.pop('DiracName', None)
             if not user_nick:
+                gLogger.warn('No user nickname for user with DN %s, '
+                             'skipping...' % user.get('DN'))
                 continue
             user['Email'] = ','.join(user.get('Email', ''))
-            result = csapi.modifyUser(user_nick, user, createIfNonExistant = True)
+            user['Groups'] = list(user.get('Groups', []))
+            result = csapi.modifyUser(user_nick, user, createIfNonExistant=True)
             if not result[ 'OK' ]:
-                gLogger.error( "Cannot modify user %s, DN: %s" % (user_nick, user.get('DN')))
+                gLogger.error( "Cannot modify user %s, DN: %s, skipping" % (user_nick, user.get('DN')))
                 continue
             
         result = csapi.commitChanges()
