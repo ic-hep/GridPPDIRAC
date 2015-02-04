@@ -89,13 +89,6 @@ class UsersAndGroupsAPI(object):
                         gLogger.error( "Empty nickname for DN %s, skipping user..." % user[ 'DN' ] )
                         continue
                     ## mangle user nickname if it already exists
-#                    if user_nick in usersInVOMS.DiracNames:
-#                        user_nick += str(usersInVOMS.countDiracNameMatches(user_nick))
-#                        if user_nick in usersInVOMS.DiracNames:
-#                            gLogger.error("Can't form a unique nick name for user %s, skipping user..." % user['DN'])
-#                            continue
-#                    
-#                    user['DiracName'] = user_nick
                     user['DiracName'] = usersInVOMS.nextValidName(user_nick)
 
                 ## all users
