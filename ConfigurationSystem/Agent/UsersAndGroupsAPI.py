@@ -3,9 +3,9 @@ import re
 from DIRAC import gConfig, gLogger
 from DIRAC.ConfigurationSystem.Client.CSAPI import CSAPI
 from GridPPDIRAC.Core.Security.MultiVOMSService import MultiVOMSService
-cn_sanitiser = re.compile('[^a-z_ ]')
+cn_sanitiser = re.compile('[^a-z._ ]')
 cn_regex = re.compile('/CN=(?P<cn>[^/]*)')
-
+cn_multispace = re.compile(' +')
 
 class DiracUsers(dict):
     @property
@@ -53,8 +53,11 @@ class UsersAndGroupsAPI(object):
         # convert to lower case, remove any non [a-z_ ] chars,
         # strip leading and trailing spaces and replace remaining
         # ' ' with '.'
-        return cn_sanitiser.sub('', cnmatches[-1].strip().lower())\
-                           .replace(' ', '.')
+        #return cn_sanitiser.sub('', cnmatches[-1].lower())\
+        #                   .strip()\
+        #                   .replace(' ', '.')
+        sanitised_name = cn_sanitiser.sub('', cnmatches[-1].lower()).strip()
+        return cn_multispace.sub('.', sanitised_name)
 
     def update_usersandgroups(self):
         result = gConfig.getOptionsDict('/Registry/VOMS/Mapping')
