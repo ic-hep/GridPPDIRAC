@@ -184,7 +184,7 @@ class UsersAndGroupsAPI(object):
         ## exists, start by blanking it's users.
         for group in groupsInVOMS:
             #csapi.addGroup(group, {'Users': ''})
-            csapi.ModifyGroup(group, {'Users': ''}, createIfNonExistant=True)
+            csapi.modifyGroup(group, {'Users': ''}, createIfNonExistant=True)
 
         for user in usersInVOMS.itervalues():
             user_nick = user.pop('DiracName', None)
