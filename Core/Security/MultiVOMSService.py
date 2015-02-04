@@ -16,7 +16,7 @@ class MultiVOMSService:
         for vo in self.__vos:
             result = gConfig.getOptionsDict('/Registry/VOMS/URLs/%s' % vo)
             if not result['OK']:
-                glogger.error(result['Message'])
+                gLogger.error(result['Message'])
                 continue
             url_dict = result['Value']
             if 'VOMSAdmin' not in url_dict:
