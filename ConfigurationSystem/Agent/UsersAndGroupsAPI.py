@@ -60,6 +60,7 @@ class UsersAndGroupsAPI(object):
 
         ## Main VO loop
         usersInVOMS = DiracUsers()
+        groupsInVOMS = set()
         for vo in self._vomsSrv.vos:
             ## Get the VO name from VOMS
             result = self._vomsSrv.admGetVOName(vo)
@@ -98,6 +99,7 @@ class UsersAndGroupsAPI(object):
                                .setdefault('Email', set())\
                                .add(mail)
                 if default_group:
+                    groupsInVOMS.add(default_group)
                     usersInVOMS.setdefault(user['DN'], user)\
                                .setdefault('Groups', set())\
                                .add(default_group)
@@ -124,6 +126,7 @@ class UsersAndGroupsAPI(object):
                     continue
                 for groupuser in result['Value']:
                     if groupuser['DN'] in usersInVOMS:
+                        groupsInVOMS.add(dirac_group)
                         usersInVOMS[groupuser['DN']].setdefault('Groups', set())\
                                                     .add(dirac_group)
 
@@ -135,6 +138,10 @@ class UsersAndGroupsAPI(object):
         ###################################################################
         gLogger.info("Updating CS with changes/new entries...")
         csapi = CSAPI()
+        ret = csapi.downloadCSData()
+        if not ret['OK']:
+            self.log.fatal( 'Can not sync the CS', ret['Message'] )
+            return ret
         ret = csapi.listUsers()
         if not ret['OK']:
             gLogger.fatal( 'Could not retrieve current list of Users' )
@@ -149,6 +156,12 @@ class UsersAndGroupsAPI(object):
         if obsoleteUsers:
             gLogger.info("Deleting obsolete users: %s" % obsoleteUsers)
             csapi.deleteUsers(obsoleteUsers)
+            
+        ## add groups before users as fails if user belongs
+        ## to unknown group. addGroups returns S_ERROR if
+        ## group already exists but don't care in that case anyway.
+        for group in groupsInVOMS:
+            csapi.addGroup(group, {'Users':''})
             
         for user in usersInVOMS.itervalues():
             user_nick = user.pop('DiracName', None)
@@ -171,6 +184,6 @@ class UsersAndGroupsAPI(object):
 
 if __name__ == '__main__':
     ## for some reason config not loaded properly
-    gConfig.loadFile('/opt/dirac/etc/DevelConfig.cfg')
+    #gConfig.loadFile('/opt/dirac/etc/DevelConfig.cfg')
     u=UsersAndGroupsAPI()
     u.update_usersandgroups()
