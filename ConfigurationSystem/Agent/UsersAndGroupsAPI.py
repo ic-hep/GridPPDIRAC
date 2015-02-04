@@ -3,25 +3,13 @@ import re
 from DIRAC import gConfig, gLogger
 from DIRAC.ConfigurationSystem.Client.CSAPI import CSAPI
 from GridPPDIRAC.Core.Security.MultiVOMSService import MultiVOMSService
-r = re.compile('(?P<group>.*)/(?P<role>Role=.*)')
 cn_sanitiser = re.compile('[^a-z_ ]')
 cn_regex=re.compile('/CN=(?P<cn>[^/]*)')
-index=re.compile('.*?[a-z_](?P<index>[0-9]*?)\Z')
 class DiracUsers(dict):
     @property
     def DiracNames(self):
         return (user['DiracName'] for user in self.itervalues() if 'DiracName' in user)
-    
-#    def DiracNameMatches(self, matchstart=''):
-#        return [dirac_name for dirac_name in self.DiracNames if dirac_name.startswith(matchstart)]
-    
-#    def countDiracNameMatches(self, matchstart=''):
-#        c=0
-#        for user in self.DiracNames:
-#            if user.startswith(matchstart):
-#                c+=1
-#        return c
-    
+
     def nextValidName(self, pattern):
         count=-1
         r = re.compile('%s(?P<index>[0-9]*?)\Z' % pattern)
@@ -35,35 +23,6 @@ class DiracUsers(dict):
         if count == -1:
             return pattern
         return pattern + str(count + 1)
-    ## NEW
-    ######################################################################
-#    def _add_user(self, user):
-#        count=0
-#        user['DiracName'] = dirac_name(user)
-#        r = re.compile('%s(?P<index>[0-9]*?)\Z' % user['DiracName'])
-#        for u in self.itervalues():
-#            match = r.search(u['DiracName'])
-#            if match:
-#                m = int(match.group('index') or 0)  # or 0 catches the case with no numbers
-#                if m > count:
-#                    count = m
-#        if count:
-#            user['DiracName'] += str(count)
-#        super(DiracUser, self).__setitem__(user['DN'], user)
-#    
-#    def update(self, other=()):
-#        for u in other.itervalues():
-#            self._add_user(u)
-#    
-#    def setdefault(self, name, value):
-#        if name in self:
-#            return self[name]
-#        self._add_user(value)
-#        return value
-#    
-#    def __setitem__(self, name, value):
-#        self._add_user(value)
-
 
 class UsersAndGroupsAPI(object):
     def __init__(self):
