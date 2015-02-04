@@ -173,4 +173,4 @@ if __name__ == '__main__':
     ## for some reason config not loaded properly
     gConfig.loadFile('/opt/dirac/etc/DevelConfig.cfg')
     u=UsersAndGroupsAPI()
-    u.something()
+    u.update_usersandgroups()
