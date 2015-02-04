@@ -15,13 +15,29 @@ class DiracUsers(dict):
 #    def DiracNameMatches(self, matchstart=''):
 #        return [dirac_name for dirac_name in self.DiracNames if dirac_name.startswith(matchstart)]
     
-    def countDiracNameMatches(self, matchstart=''):
-        c=0
-        for user in self.DiracNames:
-            if user.startswith(matchstart):
-                c+=1
-        return c
-#    def add_user(self, user):
+#    def countDiracNameMatches(self, matchstart=''):
+#        c=0
+#        for user in self.DiracNames:
+#            if user.startswith(matchstart):
+#                c+=1
+#        return c
+    
+    def nextValidName(self, pattern):
+        count=-1
+        r = re.compile('%s(?P<index>[0-9]*?)\Z' % pattern)
+        ## faster implementation than max
+        for u in self.itervalues():
+            match = r.search(u['DiracName'])
+            if match:
+                m = int(match.group('index') or 0)  # or 0 catches the case with no numbers
+                if m > count:
+                    count = m
+        if count == -1:
+            return pattern
+        return pattern + str(count + 1)
+    ## NEW
+    ######################################################################
+#    def _add_user(self, user):
 #        count=0
 #        user['DiracName'] = dirac_name(user)
 #        r = re.compile('%s(?P<index>[0-9]*?)\Z' % user['DiracName'])
@@ -36,30 +52,28 @@ class DiracUsers(dict):
 #        super(DiracUser, self).__setitem__(user['DN'], user)
 #    
 #    def update(self, other=()):
-#        gen = ((dn, u) for dn, u in others.iteritems() if u.get('DN') and u.setdefault('DiracName', dirac_name(value['DN'])))
-#        return super(DiracUsers, self).update(gen)
+#        for u in other.itervalues():
+#            self._add_user(u)
 #    
-#    def setdefault(self, name, value=None):
-#        if not isinstance(value, dict):
-#            gLogger.error('Only dict type allowed for user entry')
-#        if not value.get('DN'):
-#            gLogger.warn()
-#        value.setdefault('DiracName', dirac_name(value['DN']))
-#        return super(DiracUsers, self).setdefault(name, value)
+#    def setdefault(self, name, value):
+#        if name in self:
+#            return self[name]
+#        self._add_user(value)
+#        return value
 #    
 #    def __setitem__(self, name, value):
-#        if not value.get('DN'):
-#            gLogger.warn()
-#            return None
-#        value.setdefault('DiracName', dirac_name(value['DN']))
-#        return super(DiracUsers, self).__setitem__(name, value)
+#        self._add_user(value)
 
 
 class UsersAndGroupsAPI(object):
     def __init__(self):
         self._vomsSrv = MultiVOMSService()
 
-    def _dirac_username(self, user):
+    def dirac_name(self, user):
+        ## don't recompute if already exists
+        if user.get('DiracName'):
+            return user['DiracName']
+        
         dn = user.get('DN')
         if not dn:
             gLogger.error('User has no DN')
@@ -111,17 +125,19 @@ class UsersAndGroupsAPI(object):
             for user in result['Value']:
                 ## New user check
                 if not usersInVOMS.get(user['DN']):
-                    user_nick = self._dirac_username(user)
+                    user_nick = self.dirac_name(user)
                     if not user_nick:
                         gLogger.error( "Empty nickname for DN %s, skipping user..." % user[ 'DN' ] )
                         continue
                     ## mangle user nickname if it already exists
-                    if user_nick in usersInVOMS.DiracNames:
-                        user_nick += str(usersInVOMS.countDiracNameMatches(user_nick))
-                        if user_nick in usersInVOMS.DiracNames:
-                            gLogger.error("Can't form a unique nick name for user %s, skipping user..." % user['DN'])
-                            continue
-                    user['DiracName'] = user_nick
+#                    if user_nick in usersInVOMS.DiracNames:
+#                        user_nick += str(usersInVOMS.countDiracNameMatches(user_nick))
+#                        if user_nick in usersInVOMS.DiracNames:
+#                            gLogger.error("Can't form a unique nick name for user %s, skipping user..." % user['DN'])
+#                            continue
+#                    
+#                    user['DiracName'] = user_nick
+                    user['DiracName'] = usersInVOMS.nextValidName(user_nick)
 
                 ## all users
                 mail = user.pop('mail', None)
