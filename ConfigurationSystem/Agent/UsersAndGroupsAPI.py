@@ -177,10 +177,11 @@ class UsersAndGroupsAPI(object):
             csapi.deleteUsers(obsoleteUsers)
 
         ## add groups before users as fails if user belongs
-        ## to unknown group. addGroups returns S_ERROR if
-        ## group already exists but don't care in that case anyway.
+        ## to unknown group. use modify so if group already
+        ## exists, start by blanking it's users.
         for group in groupsInVOMS:
-            csapi.addGroup(group, {'Users': ''})
+            #csapi.addGroup(group, {'Users': ''})
+            csapi.ModifyGroup(group, {'Users': ''}, createIfNonExistant=True)
 
         for user in usersInVOMS.itervalues():
             user_nick = user.pop('DiracName', None)
@@ -206,6 +207,6 @@ class UsersAndGroupsAPI(object):
 
 if __name__ == '__main__':
     ## for some reason config not loaded properly
-    #gConfig.loadFile('/opt/dirac/etc/DevelConfig.cfg')
+    gConfig.loadFile('/opt/dirac/etc/DevelConfig.cfg')
     u = UsersAndGroupsAPI()
     u.update_usersandgroups()
