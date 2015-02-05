@@ -55,7 +55,7 @@ class DiracUsers(dict):
         r = re.compile(r'%s(?P<index>[0-9]*?)\Z' % pattern)
         ## faster implementation than max
         for u in self.itervalues():
-            match = r.search(u['DiracName'])
+            match = r.match(u['DiracName'])
             if match:
                 # or 0 catches the case with no numbers
                 m = int(match.group('index') or 0)
