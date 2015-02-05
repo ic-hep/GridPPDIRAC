@@ -1,3 +1,8 @@
+'''
+UsersAndGroupsAPI
+
+API for updating DIRAC CS from multiple VOMS
+'''
 import os
 import re
 from DIRAC import gConfig, gLogger
@@ -8,13 +13,44 @@ cn_regex = re.compile('/CN=(?P<cn>[^/]*)')
 cn_multispace = re.compile(' +')
 
 
+def dirac_name(user):
+    '''Create DIRAC id from user'''
+    ## don't recompute if already exists
+    if user.get('DiracName'):
+        return user['DiracName']
+
+    dn = user.get('DN')
+    if not dn:
+        gLogger.error('User has no DN')
+        return None
+
+    cnmatches = cn_regex.findall(dn)
+    if len(cnmatches) == 0:
+        gLogger.error('User has no CN field in DN')
+        return None
+    if len(cnmatches) > 1:
+        # CERN DNs have multiple CN fields (AFS UID, UID No., Name field)
+        gLogger.warn('User has >1 CN field in DN, using last...')
+    # convert to lower case, remove any non [a-z_ ] chars,
+    # strip leading and trailing spaces and replace remaining
+    # ' ' with '.'
+    #return cn_sanitiser.sub('', cnmatches[-1].lower())\
+    #                   .strip()\
+    #                   .replace(' ', '.')
+    sanitised_name = cn_sanitiser.sub('', cnmatches[-1].lower()).strip()
+    return cn_multispace.sub('.', sanitised_name)
+
+
 class DiracUsers(dict):
+    '''Dict of DIRAC users'''
     @property
     def DiracNames(self):
+        '''Return the list of users DIRAC ids'''
         return (user['DiracName'] for user in self.itervalues()
                 if 'DiracName' in user)
 
     def nextValidName(self, pattern):
+        '''Return next valid DIRAC id from CN'''
         count = -1
         r = re.compile(r'%s(?P<index>[0-9]*?)\Z' % pattern)
         ## faster implementation than max
@@ -31,36 +67,17 @@ class DiracUsers(dict):
 
 
 class UsersAndGroupsAPI(object):
+    '''
+    UsersAndGroupsAPI
+
+    Maintains VOMS locations and update DIRAC CS from VOMS
+    '''
     def __init__(self):
+        '''Initialise'''
         self._vomsSrv = MultiVOMSService()
 
-    def dirac_name(self, user):
-        ## don't recompute if already exists
-        if user.get('DiracName'):
-            return user['DiracName']
-
-        dn = user.get('DN')
-        if not dn:
-            gLogger.error('User has no DN')
-            return None
-
-        cnmatches = cn_regex.findall(dn)
-        if len(cnmatches) == 0:
-            gLogger.error('User has no CN field in DN')
-            return None
-        if len(cnmatches) > 1:
-            # CERN DNs have multiple CN fields (AFS UID, UID No., Name field)
-            gLogger.warn('User has >1 CN field in DN, using last...')
-        # convert to lower case, remove any non [a-z_ ] chars,
-        # strip leading and trailing spaces and replace remaining
-        # ' ' with '.'
-        #return cn_sanitiser.sub('', cnmatches[-1].lower())\
-        #                   .strip()\
-        #                   .replace(' ', '.')
-        sanitised_name = cn_sanitiser.sub('', cnmatches[-1].lower()).strip()
-        return cn_multispace.sub('.', sanitised_name)
-
     def update_usersandgroups(self):
+        '''Updates the DIRAC CS from VOMS'''
         result = gConfig.getOptionsDict('/Registry/VOMS/Mapping')
         if not result['OK']:
             gLogger.fatal('No DIRAC group to VOMS role mapping available')
@@ -71,6 +88,7 @@ class UsersAndGroupsAPI(object):
         vomsMapping = dict(((v, k) for k, v in result['Value'].iteritems()))
 
         ## Main VO loop
+        ################################################################
         usersInVOMS = DiracUsers()
         groupsInVOMS = set()
         for vo in self._vomsSrv.vos:
@@ -101,7 +119,7 @@ class UsersAndGroupsAPI(object):
             for user in result['Value']:
                 ## New user check
                 if not usersInVOMS.get(user['DN']):
-                    user_nick = self.dirac_name(user)
+                    user_nick = dirac_name(user)
                     if not user_nick:
                         gLogger.error("Empty nickname for DN %s, skipping "
                                       "user..." % user['DN'])
@@ -154,7 +172,7 @@ class UsersAndGroupsAPI(object):
                         usersInVOMS[gdn].setdefault('Groups', set())\
                                         .add(dirac_group)
 
-        ## End of vo loop
+        ## End of VO loop
         ###################################################################
 
         ## Updating CS
