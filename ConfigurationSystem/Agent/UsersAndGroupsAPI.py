@@ -7,6 +7,7 @@ cn_sanitiser = re.compile('[^a-z._ ]')
 cn_regex = re.compile('/CN=(?P<cn>[^/]*)')
 cn_multispace = re.compile(' +')
 
+
 class DiracUsers(dict):
     @property
     def DiracNames(self):
@@ -162,7 +163,7 @@ class UsersAndGroupsAPI(object):
         csapi = CSAPI()
         ret = csapi.downloadCSData()
         if not ret['OK']:
-            self.log.fatal('Can not sync the CS', ret['Message'])
+            gLogger.fatal('Can not sync the CS', ret['Message'])
             return ret
         ret = csapi.listUsers()
         if not ret['OK']:
