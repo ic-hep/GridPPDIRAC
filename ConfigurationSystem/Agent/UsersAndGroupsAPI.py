@@ -16,7 +16,7 @@ class DiracUsers(dict):
 
     def nextValidName(self, pattern):
         count = -1
-        r = re.compile('%s(?P<index>[0-9]*?)\Z' % pattern)
+        r = re.compile(r'%s(?P<index>[0-9]*?)\Z' % pattern)
         ## faster implementation than max
         for u in self.itervalues():
             match = r.search(u['DiracName'])
@@ -212,5 +212,5 @@ class UsersAndGroupsAPI(object):
 if __name__ == '__main__':
     ## for some reason config not loaded properly
     gConfig.loadFile('/opt/dirac/etc/DevelConfig.cfg')
-    u = UsersAndGroupsAPI()
-    u.update_usersandgroups()
+    uag = UsersAndGroupsAPI()
+    uag.update_usersandgroups()
