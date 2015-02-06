@@ -5,7 +5,7 @@ API for updating DIRAC CS from multiple VOMS
 '''
 import os
 import re
-from DIRAC import gConfig, gLogger
+from DIRAC import gConfig, gLogger, S_OK
 from DIRAC.ConfigurationSystem.Client.CSAPI import CSAPI
 from GridPPDIRAC.Core.Security.MultiVOMSService import MultiVOMSService
 cn_sanitiser = re.compile('[^a-z._ ]')
@@ -227,6 +227,7 @@ class UsersAndGroupsAPI(object):
                           result['Message'])
             return result
         gLogger.info("Configuration committed")
+        return S_OK(usersInVOMS)
 
 if __name__ == '__main__':
     ## for some reason config not loaded properly
