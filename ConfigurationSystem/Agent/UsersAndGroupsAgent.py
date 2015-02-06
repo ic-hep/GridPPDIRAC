@@ -12,7 +12,7 @@ from GridPPDIRAC.ConfigurationSystem.private.UsersAndGroupsAPI import UsersAndGr
 class UsersAndGroupsAgent(UsersAndGroups):
     '''
     UsersAndGroupsAgent
-    
+
     Automatically takes care of updating the DIRAC CS
     to reflect the user and role state of several VOMS
     servers
