@@ -1,14 +1,26 @@
-from collections import namedtuple
+'''
+MultiVOMSService
 
+VOMS SOAP Services for multiple VOs
+'''
+from collections import namedtuple
 from DIRAC import gConfig, S_OK, S_ERROR, gLogger
 from DIRAC.Core.Utilities.SOAPFactory import getSOAPClient
-from DIRAC.Core.Security.VOMSService import _processListReturn, _processListDictReturn
+from DIRAC.Core.Security.VOMSService import (_processListReturn,
+                                             _processListDictReturn)
 
 SOAPClients = namedtuple('SOAPClients', ('Admin', 'Attributes'))
 
-class MultiVOMSService:
-    def __init__( self, adminUrls = {}, attributesUrls = {} ):
-        self.__soapClients = {}#'LHCb': VOURL(adminUrl, attributesUrl)}
+
+class MultiVOMSService(object):
+    '''
+    Multiple VO VOMS Service
+    '''
+    def __init__(self, adminUrls=None, attributesUrls=None):
+        '''initialise'''
+        adminUrls = adminUrls or {}
+        attributesUrls = attributesUrls or {}
+        self.__soapClients = {}
         result = gConfig.getSections('/Registry/VOMS/URLs')
         if not result['OK']:
             raise Exception(result['Message'])
@@ -20,34 +32,40 @@ class MultiVOMSService:
                 continue
             url_dict = result['Value']
             if 'VOMSAdmin' not in url_dict:
-                gLogger.error("Skipping setting up VOMSService for VO: %s as no VOMSAdmin option in config" % vo)
+                gLogger.error("Skipping setting up VOMSService for VO: %s "
+                              "as no VOMSAdmin option in config" % vo)
                 continue
             if 'VOMSAttributes' not in url_dict:
-                gLogger.error("Skipping setting up VOMSService for VO: %s as no VOMSAttributes option in config" % vo)
+                gLogger.error("Skipping setting up VOMSService for VO: %s "
+                              "as no VOMSAttributes option in config" % vo)
                 continue
-            
+
             retries = 3
             while retries:
                 try:
-                    clients = SOAPClients(getSOAPClient("%s?wsdl" % adminUrls.get(vo, url_dict['VOMSAdmin'])),
-                                          getSOAPClient("%s?wsdl" % attributesUrls.get(vo, url_dict['VOMSAttributes'])))
-                    clients.Admin.set_options(headers={"X-VOMS-CSRF-GUARD":"1"})
-                    clients.Attributes.set_options(headers={"X-VOMS-CSRF-GUARD":"1"})
+                    admin = adminUrls.get(vo, url_dict['VOMSAdmin'])
+                    attr = attributesUrls.get(vo, url_dict['VOMSAttributes'])
+                    clients = SOAPClients(getSOAPClient("%s?wsdl" % admin),
+                                          getSOAPClient("%s?wsdl" % attr))
+                    clients.Admin\
+                           .set_options(headers={"X-VOMS-CSRF-GUARD": "1"})
+                    clients.Attributes\
+                           .set_options(headers={"X-VOMS-CSRF-GUARD": "1"})
                     self.__soapClients[vo] = clients
                     break
                 except Exception:
-                    retries-=1
+                    retries -= 1
             else:
-                gLogger.error("Maximum number of retries reached. Skipping setting up VOMSService for VO: %s" % vo)
+                gLogger.error("Maximum number of retries reached. Skipping "
+                              "setting up VOMSService for VO: %s" % vo)
 
     @property
     def vos(self):
+        '''Return list of VOs'''
         return self.__vos
-            
-#    def getKnownVOs(self):
-#        return self.__vos
 
     def admListMembers(self, vo):
+        '''List VO members'''
         try:
             result = self.__soapClients[vo].Admin.service.listMembers()
         except Exception, e:
@@ -57,6 +75,7 @@ class MultiVOMSService:
         return S_OK(_processListDictReturn(result))
 
     def admListRoles(self, vo):
+        '''List VO Roles'''
         try:
             result = self.__soapClients[vo].Admin.service.listRoles()
         except Exception, e:
@@ -65,10 +84,12 @@ class MultiVOMSService:
             return S_OK(_processListReturn(result.listRolesReturn))
         return S_OK(_processListReturn(result))
 
-
     def admListUsersWithRole(self, vo, group, role):
+        '''List all users with given role'''
         try:
-            result = self.__soapClients[vo].Admin.service.listUsersWithRole(group, role)
+            result = self.__soapClients[vo].Admin\
+                                           .service\
+                                           .listUsersWithRole(group, role)
         except Exception, e:
             return S_ERROR("Error in function listUsersWithRole: %s" % str(e))
         if 'listUsersWithRoleReturn' in dir(result):
@@ -76,6 +97,7 @@ class MultiVOMSService:
         return S_OK(_processListDictReturn(result))
 
     def admGetVOName(self, vo):
+        '''Get VO name from VOMS'''
         try:
             result = self.__soapClients[vo].Admin.service.getVOName()
         except Exception, e:
@@ -83,11 +105,14 @@ class MultiVOMSService:
         return S_OK(result)
 
     def attGetUserNickname(self, vo, dn, ca):
+        '''Get a users nickname'''
         user = self.__soapClients[vo].Attributes.factory.create('ns0:User')
         user.DN = dn
         user.CA = ca
         try:
-            result = self.__soapClients[vo].Attributes.service.listUserAttributes(user)
+            result = self.__soapClients[vo].Attributes\
+                                           .service\
+                                           .listUserAttributes(user)
         except Exception, e:
             return S_ERROR("Error in function getUserNickname: %s" % str(e))
         if 'listUserAttributesReturn' in dir(result):
