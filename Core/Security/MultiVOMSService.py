@@ -45,8 +45,10 @@ class MultiVOMSService(object):
                 try:
                     admin = adminUrls.get(vo, url_dict['VOMSAdmin'])
                     attr = attributesUrls.get(vo, url_dict['VOMSAttributes'])
-                    clients = SOAPClients(getSOAPClient("%s?wsdl" % admin),
-                                          getSOAPClient("%s?wsdl" % attr))
+                    clients = SOAPClients(getSOAPClient("%s?wsdl" % admin,
+                                                        sslMethod="TLSv1"),
+                                          getSOAPClient("%s?wsdl" % attr,
+                                                        sslMethod="TLSv1"))
                     clients.Admin\
                            .set_options(headers={"X-VOMS-CSRF-GUARD": "1"})
                     clients.Attributes\
