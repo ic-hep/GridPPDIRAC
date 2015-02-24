@@ -3,7 +3,7 @@ UsersAndGroupsAgent
 """
 
 __RCSID__ = "$Id$"
-
+import os
 from DIRAC import S_OK
 from DIRAC.ConfigurationSystem.Agent.UsersAndGroups import UsersAndGroups
 from GridPPDIRAC.ConfigurationSystem.private.UsersAndGroupsAPI import UsersAndGroupsAPI
@@ -20,7 +20,10 @@ class UsersAndGroupsAgent(UsersAndGroups):
     def initialize(self):
         '''Initialisation'''
         self._uag = UsersAndGroupsAPI()
-        return UsersAndGroups.initialize(self)
+        self.am_setOption("PollingTime", 3600 * 6)  # Every 6 hours
+        self.proxyLocation = os.path.join(self.am_getWorkDirectory(),
+                                          ".volatileId")
+        return S_OK()
 
     def execute(self):
         """
@@ -30,7 +33,7 @@ class UsersAndGroupsAgent(UsersAndGroups):
         if not result['OK']:
             return result
 
-        #LFC Check
+        # LFC Check
         if self.am_getOption("LFCCheckEnabled", True):
             result = self.checkLFCRegisteredUsers(result['Value'])
             if not result['OK']:
