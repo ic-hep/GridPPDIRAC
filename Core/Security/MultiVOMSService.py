@@ -61,6 +61,9 @@ class MultiVOMSService(object):
                 gLogger.error("Maximum number of retries reached. Skipping "
                               "setting up VOMSService for VO: %s" % vo)
 
+        if not self.__soapClients:
+            raise RuntimeError("Couldn't setup ANY SOAP clients")
+
     @property
     def vos(self):
         '''Return list of VOs'''
