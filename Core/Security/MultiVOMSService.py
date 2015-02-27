@@ -3,11 +3,16 @@ MultiVOMSService
 
 VOMS SOAP Services for multiple VOs
 '''
+import ssl
+ssl._DEFAULT_CIPHERS = 'DEFAULT:!ECDH:!aNULL:!eNULL:!LOW:!EXPORT:!SSLv2'
+
 from collections import namedtuple
+from suds.client import Client
 from DIRAC import gConfig, S_OK, S_ERROR, gLogger
-from DIRAC.Core.Utilities.SOAPFactory import getSOAPClient
+from DIRAC.Core.Security.Locations import getHostCertificateAndKeyLocation
 from DIRAC.Core.Security.VOMSService import (_processListReturn,
                                              _processListDictReturn)
+from GridPPDIRAC.Core.Security.HTTPSClientUtils import HTTPSClientCertTransport
 
 SOAPClients = namedtuple('SOAPClients', ('Admin', 'Attributes'))
 
@@ -21,6 +26,15 @@ class MultiVOMSService(object):
         adminUrls = adminUrls or {}
         attributesUrls = attributesUrls or {}
         self.__soapClients = {}
+
+        locs = getHostCertificateAndKeyLocation()
+        if not locs:
+            raise RuntimeError("Cannot find the host cert and key files")
+        hostCert, hostKey = locs
+        gLogger.info("using host cert: %s" % hostCert)
+        gLogger.info("using host key: %s" % hostKey)
+        httpstransport = HTTPSClientCertTransport(hostCert, hostKey)
+
         result = gConfig.getSections('/Registry/VOMS/URLs')
         if not result['OK']:
             raise Exception(result['Message'])
@@ -45,15 +59,17 @@ class MultiVOMSService(object):
                 try:
                     admin = adminUrls.get(vo, url_dict['VOMSAdmin'])
                     attr = attributesUrls.get(vo, url_dict['VOMSAttributes'])
-                    clients = SOAPClients(getSOAPClient("%s?wsdl" % admin,
-                                                        sslMethod="TLSv1"),
-                                          getSOAPClient("%s?wsdl" % attr,
-                                                        sslMethod="TLSv1"))
-                    clients.Admin\
-                           .set_options(headers={"X-VOMS-CSRF-GUARD": "1"})
-                    clients.Attributes\
-                           .set_options(headers={"X-VOMS-CSRF-GUARD": "1"})
-                    self.__soapClients[vo] = clients
+
+                    adminClient = Client(admin + '?wsdl',
+                                         transport=httpstransport)
+                    adminClient.set_options(headers={"X-VOMS-CSRF-GUARD": "1"})
+
+                    attrClient = Client(attr + '?wsdl',
+                                        transport=httpstransport)
+                    attrClient.set_options(headers={"X-VOMS-CSRF-GUARD": "1"})
+
+                    self.__soapClients[vo] = SOAPClients(adminClient,
+                                                         attrClient)
                     break
                 except Exception:
                     retries -= 1
