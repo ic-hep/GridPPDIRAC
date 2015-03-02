@@ -90,7 +90,7 @@ class UsersAndGroupsAPI(object):
         ## Main VO loop
         ################################################################
         usersInVOMS = DiracUsers()
-        groupsInVOMS = set()
+        #groupsInVOMS = set()
         for vo in self._vomsSrv.vos:
             ## Get the VO name from VOMS
             result = self._vomsSrv.admGetVOName(vo)
@@ -134,7 +134,7 @@ class UsersAndGroupsAPI(object):
                                .setdefault('Email', set())\
                                .add(mail)
                 if default_group:
-                    groupsInVOMS.add(default_group)
+                    #groupsInVOMS.add(default_group)
                     usersInVOMS.setdefault(user['DN'], user)\
                                .setdefault('Groups', set())\
                                .add(default_group)
@@ -168,7 +168,7 @@ class UsersAndGroupsAPI(object):
                 for groupuser in result['Value']:
                     gdn = groupuser['DN']
                     if gdn in usersInVOMS:
-                        groupsInVOMS.add(dirac_group)
+                        #groupsInVOMS.add(dirac_group)
                         usersInVOMS[gdn].setdefault('Groups', set())\
                                         .add(dirac_group)
 
@@ -193,33 +193,45 @@ class UsersAndGroupsAPI(object):
             return ret
         currentUsers = ret['Value']
 
-        ## Removing obsolete users, commented out for now
-        obsoleteUsers = set(currentUsers) - set(usersInVOMS.DiracNames)
-        if obsoleteUsers:
-            gLogger.info("Deleting obsolete users: %s" % obsoleteUsers)
-            #csapi.deleteUsers(obsoleteUsers)
-
         ## add groups before users as fails if user belongs
         ## to unknown group. use modify so if group already
         ## exists, start by blanking it's users.
-        for group in groupsInVOMS:
+        managed_groups = set(vomsMapping.itervalues())
+        for group in managed_groups:
             #csapi.addGroup(group, {'Users': ''})
             csapi.modifyGroup(group, {'Users': ''}, createIfNonExistant=True)
 
+        obsoleteUsers = set()
         for user in usersInVOMS.itervalues():
             user_nick = user.pop('DiracName', None)
             if not user_nick:
                 gLogger.warn('No user nickname for user with DN %s, '
                              'skipping...' % user.get('DN'))
                 continue
+
+            # Remove managed groups from current user
+            # and only add them back if VOMS allows.
+            current_groups = set(currentUsers.get(user_nick, {})
+                                             .get('Groups', []))
+            new_groups = current_groups - managed_groups
+            new_groups.update(user.get('Groups', set()))
+            if not new_groups:
+                obsoleteUsers.add(user_nick)
+
+            user['Groups'] = list(new_groups)
             user['Email'] = ','.join(user.get('Email', ''))
-            user['Groups'] = list(user.get('Groups', []))
             result = csapi.modifyUser(user_nick, user,
                                       createIfNonExistant=True)
             if not result['OK']:
                 gLogger.error("Cannot modify user %s, DN: %s, skipping"
                               % (user_nick, user.get('DN')))
                 continue
+
+        ## Removing obsolete users, commented out for now
+        #obsoleteUsers = set(currentUsers) - set(usersInVOMS.DiracNames)
+        if obsoleteUsers:
+            gLogger.info("Deleting obsolete users: %s" % obsoleteUsers)
+            #csapi.deleteUsers(obsoleteUsers)
 
         result = csapi.commitChanges()
         if not result['OK']:

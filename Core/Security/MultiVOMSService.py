@@ -6,7 +6,6 @@ VOMS SOAP Services for multiple VOs
 import ssl
 ssl._DEFAULT_CIPHERS = 'DEFAULT:!ECDH:!aNULL:!eNULL:!LOW:!EXPORT:!SSLv2'
 
-from collections import namedtuple
 from suds.client import Client
 from DIRAC import gConfig, S_OK, S_ERROR, gLogger
 from DIRAC.Core.Security.Locations import getHostCertificateAndKeyLocation
@@ -14,17 +13,14 @@ from DIRAC.Core.Security.VOMSService import (_processListReturn,
                                              _processListDictReturn)
 from GridPPDIRAC.Core.Security.HTTPSClientUtils import HTTPSClientCertTransport
 
-SOAPClients = namedtuple('SOAPClients', ('Admin', 'Attributes'))
-
 
 class MultiVOMSService(object):
     '''
     Multiple VO VOMS Service
     '''
-    def __init__(self, adminUrls=None, attributesUrls=None):
+    def __init__(self, adminUrls=None):
         '''initialise'''
         adminUrls = adminUrls or {}
-        attributesUrls = attributesUrls or {}
         self.__soapClients = {}
 
         locs = getHostCertificateAndKeyLocation()
@@ -33,7 +29,6 @@ class MultiVOMSService(object):
         hostCert, hostKey = locs
         gLogger.info("using host cert: %s" % hostCert)
         gLogger.info("using host key: %s" % hostKey)
-        httpstransport = HTTPSClientCertTransport(hostCert, hostKey)
 
         result = gConfig.getSections('/Registry/VOMS/URLs')
         if not result['OK']:
@@ -49,27 +44,17 @@ class MultiVOMSService(object):
                 gLogger.error("Skipping setting up VOMSService for VO: %s "
                               "as no VOMSAdmin option in config" % vo)
                 continue
-            if 'VOMSAttributes' not in url_dict:
-                gLogger.error("Skipping setting up VOMSService for VO: %s "
-                              "as no VOMSAttributes option in config" % vo)
-                continue
 
             retries = 3
             while retries:
                 try:
                     admin = adminUrls.get(vo, url_dict['VOMSAdmin'])
-                    attr = attributesUrls.get(vo, url_dict['VOMSAttributes'])
-
+                    httpstransport = HTTPSClientCertTransport(hostCert,
+                                                              hostKey)
                     adminClient = Client(admin + '?wsdl',
                                          transport=httpstransport)
                     adminClient.set_options(headers={"X-VOMS-CSRF-GUARD": "1"})
-
-                    attrClient = Client(attr + '?wsdl',
-                                        transport=httpstransport)
-                    attrClient.set_options(headers={"X-VOMS-CSRF-GUARD": "1"})
-
-                    self.__soapClients[vo] = SOAPClients(adminClient,
-                                                         attrClient)
+                    self.__soapClients[vo] = adminClient
                     break
                 except Exception:
                     retries -= 1
@@ -88,7 +73,7 @@ class MultiVOMSService(object):
     def admListMembers(self, vo):
         '''List VO members'''
         try:
-            result = self.__soapClients[vo].Admin.service.listMembers()
+            result = self.__soapClients[vo].service.listMembers()
         except Exception, e:
             return S_ERROR("Error in function listMembers: %s" % str(e))
         if 'listMembersReturn' in dir(result):
@@ -98,7 +83,7 @@ class MultiVOMSService(object):
     def admListRoles(self, vo):
         '''List VO Roles'''
         try:
-            result = self.__soapClients[vo].Admin.service.listRoles()
+            result = self.__soapClients[vo].service.listRoles()
         except Exception, e:
             return S_ERROR("Error in function listRoles: %s" % str(e))
         if 'listRolesReturn' in dir(result):
@@ -108,8 +93,7 @@ class MultiVOMSService(object):
     def admListUsersWithRole(self, vo, group, role):
         '''List all users with given role'''
         try:
-            result = self.__soapClients[vo].Admin\
-                                           .service\
+            result = self.__soapClients[vo].service\
                                            .listUsersWithRole(group, role)
         except Exception, e:
             return S_ERROR("Error in function listUsersWithRole: %s" % str(e))
@@ -120,22 +104,7 @@ class MultiVOMSService(object):
     def admGetVOName(self, vo):
         '''Get VO name from VOMS'''
         try:
-            result = self.__soapClients[vo].Admin.service.getVOName()
+            result = self.__soapClients[vo].service.getVOName()
         except Exception, e:
             return S_ERROR("Error in function getVOName: %s" % str(e))
         return S_OK(result)
-
-    def attGetUserNickname(self, vo, dn, ca):
-        '''Get a users nickname'''
-        user = self.__soapClients[vo].Attributes.factory.create('ns0:User')
-        user.DN = dn
-        user.CA = ca
-        try:
-            result = self.__soapClients[vo].Attributes\
-                                           .service\
-                                           .listUserAttributes(user)
-        except Exception, e:
-            return S_ERROR("Error in function getUserNickname: %s" % str(e))
-        if 'listUserAttributesReturn' in dir(result):
-            return S_OK(result.listUserAttributesReturn[0].value)
-        return S_OK(result[0].value)
