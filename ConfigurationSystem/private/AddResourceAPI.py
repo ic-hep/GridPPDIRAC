@@ -21,14 +21,14 @@ from DIRAC.ConfigurationSystem.Client.Helpers.Registry import getVOs
 __all__ = ['checkUnusedCEs', 'checkUnusedSEs', 'updateSites', 'updateSEs']
 
 
+CES_RE = re.compile('/Resources/Sites/.*/CEs/[^/]*$')
+VER_RE = re.compile(r"(?P<major_revision>[0-9])\.[0-9]+")
+
+
 def _updateCS(changeSet):
     '''
     update CS
     '''
-    if not len(changeSet):
-        gLogger.notice('No changes required')
-        return S_OK()
-
     csAPI = CSAPI()
     csAPI.initialize()
     result = csAPI.downloadCSData()
@@ -36,8 +36,13 @@ def _updateCS(changeSet):
         gLogger.error('Failed to initialise CSAPI object', result['Message'])
         return S_ERROR('Failed to initialise CSAPI object')
 
-    changeList = list(changeSet)
-    changeList.sort()
+    # remove cases where old [2] and new [3] values are the same
+    # sort from set/generator/iterable into list
+    changeList = sorted((i for i in changeSet if i[2] != i[3]))
+
+    if not len(changeList):
+        gLogger.notice('No changes required')
+        return S_OK()
 
     gLogger.notice('Updating the CS...')
     gLogger.notice('------------------')
@@ -58,7 +63,7 @@ def _updateCS(changeSet):
         gLogger.error("Error while commit to CS", result['Message'])
         return S_ERROR("Error while commit to CS")
     gLogger.notice("Successfully committed %d changes to CS\n"
-                   % len(changeSet))
+                   % len(changeList))
     return S_OK()
 
 
@@ -122,6 +127,23 @@ class _configSet(set):
                                     new_value))
 
 
+def _map_os_ver(changeSet):
+    '''
+    filter the OS version string into something
+    simpler i.e. EL6
+    '''
+    for change in changeSet:
+        sect, opt, old_val, new_val = change
+        if CES_RE.match(sect) and opt == 'OS':
+            version_match = VER_RE.search(new_val)
+            if version_match:
+                new_val = "EL%s" % version_match.group('major_revision')
+            else:
+                gLogger.warn("OS version string '%s' doesn't match our "
+                             "regex for filtering" % new_val)
+        yield sect, opt, old_val, new_val
+
+
 def updateSites(vo, ceBdiiDict=None):
     '''
     update sites
@@ -131,7 +153,7 @@ def updateSites(vo, ceBdiiDict=None):
         gLogger.error('Failed to get site updates', result['Message'])
         return S_ERROR('Failed to get site updates')
     changeSet = result['Value']
-    return _updateCS(changeSet)
+    return _updateCS(_map_os_ver(changeSet))
 
 
 def updateSEs(vo, seBdiiDict=None):
