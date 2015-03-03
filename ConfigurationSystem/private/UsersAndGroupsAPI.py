@@ -228,10 +228,9 @@ class UsersAndGroupsAPI(object):
                 continue
 
         ## Removing obsolete users, commented out for now
-        #obsoleteUsers = set(currentUsers) - set(usersInVOMS.DiracNames)
         if obsoleteUsers:
             gLogger.info("Deleting obsolete users: %s" % obsoleteUsers)
-            #csapi.deleteUsers(obsoleteUsers)
+            csapi.deleteUsers(obsoleteUsers)
 
         result = csapi.commitChanges()
         if not result['OK']:
