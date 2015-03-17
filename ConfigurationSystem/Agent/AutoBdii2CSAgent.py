@@ -16,9 +16,7 @@ __RCSID__ = "$Id$"
 from DIRAC import S_OK
 from DIRAC.ConfigurationSystem.Agent.Bdii2CSAgent import Bdii2CSAgent
 from GridPPDIRAC.ConfigurationSystem.private.AddResourceAPI import (checkUnusedCEs,
-                                                                    checkUnusedSEs,
-                                                                    updateSites,
-                                                                    updateSEs)
+                                                                    checkUnusedSEs)
 
 
 class AutoBdii2CSAgent(Bdii2CSAgent):
@@ -28,8 +26,6 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
     '''
     domain = 'LCG'
     country_default = 'xx'
-    diracSiteTemplate = '{domain}.{site}.{country}'
-    diracSENameTemplate = '{DIRACSiteName}-disk'
 
     def initialize(self):
         '''
@@ -37,31 +33,16 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
         These include:
         domain            - The Grid domain used to generate
                             the DIRAC site name e.g. LCG
-        country_default   - the default country code to use to substitute into
+        country_default   - The default country code to use to substitute into
                             the dirac site name
-        diracSiteTemplate - The template from which the DIRAC site name is
-                            generated:
-                            Can use substitutions:
-                                  {domain}        - The Grid domain e.g. LCG,
-                                  {site}          - The site name
-                                  {country}       - The country code e.g. uk,
-                                                    default is country_default
-                                                    if it cannot be determined
-                                                    automatically
-        diracSENameTemplate - The template from which the DIRAC SE name is
-                              generated.
-                              Can use substitutions:
-                                  {domain}        - The Grid domain e.g. LCG,
-                                  {DIRACSiteName} - The DIRAC site name,
-                                  {country}       - The country code e.g. uk,
-                                  {gridSE}        - The Grid SE name
+        bdii_host         - The host machine:port from which to ldap query
+                            default value = None
+                            By default uses the DIRAC built in default
+                            DIRAC default = 'lcg-bdii.cern.ch:2170'
         '''
         self.domain = self.am_getOption('Domain', 'LCG')
         self.country_default = self.am_getOption('CountryCodeDefault', 'xx')
-        self.diracSiteTemplate = self.am_getOption('diracSiteTemplate',
-                                                   '{domain}.{site}.{country}')
-        self.diracSENameTemplate = self.am_getOption('diracSENameTemplate',
-                                                     '{DIRACSiteName}-disk')
+        self.bdii_host = self.am_getOption('BDIIHost', None)
         return Bdii2CSAgent.initialize(self)
 
     def execute(self):
@@ -71,48 +52,22 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
         for vo in self.voName:
             if self.processCEs:
                 ## Checking for unused CEs
-                ceBdii = None
                 result = checkUnusedCEs(vo,
-                                        alternative_bdii=self.alternativeBDIIs,
+                                        host=self.bdii_host,
                                         domain=self.domain,
-                                        country_default=self.country_default,
-                                        diracSiteTemplate=
-                                        self.diracSiteTemplate)
+                                        country_default=self.country_default)
                 if not result['OK']:
                     self.log.error("Error while running check for unused CEs "
                                    "in the VO %s: %s"
                                    % (vo, result['Message']))
                     continue
-                ceBdii = result['Value']
-
-                ## Updating the new CEs in the CS
-                result = updateSites(vo, ceBdii)
-                if not result['OK']:
-                    self.log.error("Error while updating sites for VO %s: %s"
-                                   % (vo, result['Message']))
-                    continue
 
             if self.processSEs:
                 ## Checking for unused SEs
-                seBdii = None
-                result = checkUnusedSEs(vo,
-                                        alternative_bdii=
-                                        self.alternativeBDIIs,
-                                        domain=self.domain,
-                                        country_default=self.country_default,
-                                        diracSENameTemplate=
-                                        self.diracSENameTemplate)
+                result = checkUnusedSEs(vo, host=self.bdii_host)
                 if not result['OK']:
                     self.log.error("Error while running check for unused SEs "
                                    "in the VO %s: %s"
-                                   % (vo, result['Message']))
-                    continue
-                seBdii = result['Value']
-
-                ## Updating the new SEs in the CS
-                result = updateSEs(vo, seBdii)
-                if not result['OK']:
-                    self.log.error("Error while updating SEs for VO %s: %s"
                                    % (vo, result['Message']))
                     continue
 
