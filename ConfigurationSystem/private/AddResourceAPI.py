@@ -194,7 +194,7 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
                 max_total_jobs =  min(1000, int(total_cpus/2))
                 max_waiting_jobs =  max(2, int(max_total_jobs * 0.1))
                     
-                changeSet.add(queue_path, 'VO', ', '.join(vo))
+                changeSet.add(queue_path, 'VO', ', '.join(sorted(vo)))
                 changeSet.add(queue_path, 'SI00', q_si00)
                 changeSet.add(queue_path, 'maxCPUTime', max_cpu_time)
                 changeSet.add(queue_path, 'MaxTotalJobs', str(max_total_jobs))
@@ -214,7 +214,7 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
         changeSet.add(sitePath, 'Description', description)
         changeSet.add(sitePath, 'Coordinates', '%s:%s' % (longitude, latitude))
         changeSet.add(sitePath, 'Mail', mail)
-        changeSet.add(sitePath, 'CE', ', '.join(ce_list))
+        changeSet.add(sitePath, 'CE', ', '.join(sorted(ce_list)))
     return _updateCS(changeSet)
 
 class SiteNamingDict(dict):
@@ -346,18 +346,19 @@ def checkUnusedSEs(vo, host=None):
                 gLogger.warn("No port determined for %s" % se)
                 continue
 
+            ## DIRACs Bdii2CSAgent used the ServiceAccessControlBaseRule value
             bdiiVOs = set([re.sub('^VO:', '', rule) for rule in
                            srmDict.get('GlueServiceAccessControlBaseRule', [])
                            ])            
             
             old_path = gConfig.getValue(cfgPath(accessSection, 'Path'), None)
-            path = vo_info.get(se, {}).get('Path', '')
+            path = vo_info.get(se, {}).get('Path')
             vo_path = vo_info.get(se, {}).get('VOPath')
             
             # If path is different from last VO then we just default the
             # path to / and use the VOPath dict
-            if old_path and path != old_path:
-                vo_path = path
+            if old_path and path and path != old_path:
+                vo_path = vo_path or os.path.join(path, vo)
                 path = '/'
 
             if vo_path:
@@ -375,7 +376,7 @@ def checkUnusedSEs(vo, host=None):
         changeSet.add(hostSection, 'Host', se)
         changeSet.add(seSection, 'BackendType', backend_type)
         changeSet.add(seSection, 'Description', description)
-        changeSet.add(seSection, 'VO', ', '.join(bdiiVOs))
+        changeSet.add(seSection, 'VO', ', '.join(sorted(bdiiVOs)))
         changeSet.add(seSection, 'TotalSize', total_size)
 
 
