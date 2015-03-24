@@ -97,6 +97,8 @@ class MultiVOMSService(object):
                                            .listUsersWithRole(group, role)
         except Exception, e:
             return S_ERROR("Error in function listUsersWithRole: %s" % str(e))
+        if result is None:
+            return S_ERROR("listUsersWithRole SOAP service returned None")
         if 'listUsersWithRoleReturn' in dir(result):
             return S_OK(_processListDictReturn(result.listUsersWithRoleReturn))
         return S_OK(_processListDictReturn(result))
