@@ -75,14 +75,20 @@ class _configSet(set):
     Wrapper class around set to provide a nicer add syntax
     and also to get the element in the form expected for _updateCS
     '''
-    def add(self, section, option, new_value):
+    def add(self, section, option, new_value, append=False):
         '''
         Overrides base class add giving nicer syntax for our needs
         '''
+        old_value = gConfig.getValue(cfgPath(section, option), None)
+        if append and old_value:
+            if isinstance(new_value, (list, set)):
+                ovlist = set(old_value.split(', '))
+                new_value = ', '.join(sorted(ovlist.update(new_value)))
+            else:
+                new_value = old_value + new_value
         super(_configSet, self).add((section,
                                     option,
-                                    gConfig.getValue(cfgPath(section, option),
-                                                     None),
+                                    old_value,
                                     new_value))
 
 #def _map_os_ver(ce, os_name, os_version, os_release):
@@ -178,7 +184,7 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
                 
                 ce_type = queue_info.get('GlueCEImplementationName', '')
                 max_cpu_time = queue_info.get('GlueCEPolicyMaxCPUTime')
-                vo = set((rule.replace('VO:','')
+                vos = set((rule.replace('VO:','')
                           for rule in queue_info.get('GlueCEAccessControlBaseRule')
                           if rule.startswith('VO:')))
                 q_si00 = ''
@@ -194,7 +200,8 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
                 max_total_jobs =  min(1000, int(total_cpus/2))
                 max_waiting_jobs =  max(2, int(max_total_jobs * 0.1))
                     
-                changeSet.add(queue_path, 'VO', ', '.join(sorted(vo)))
+
+                changeSet.add(queue_path, 'VO', vos, append=True)
                 changeSet.add(queue_path, 'SI00', q_si00)
                 changeSet.add(queue_path, 'maxCPUTime', max_cpu_time)
                 changeSet.add(queue_path, 'MaxTotalJobs', str(max_total_jobs))
@@ -214,7 +221,7 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
         changeSet.add(sitePath, 'Description', description)
         changeSet.add(sitePath, 'Coordinates', '%s:%s' % (longitude, latitude))
         changeSet.add(sitePath, 'Mail', mail)
-        changeSet.add(sitePath, 'CE', ', '.join(sorted(ce_list)))
+        changeSet.add(sitePath, 'CE', ce_list, append=True)
     return _updateCS(changeSet)
 
 class SiteNamingDict(dict):
@@ -226,11 +233,11 @@ class SiteNamingDict(dict):
         
         for s in result['Value']:
             r = gConfig.getOptionsDict(cfgPath(cfgBase, s, 'AccessProtocol.1'))
-            if not r['OK'] or 'Host' not in r:
+            if not r['OK'] or 'Host' not in r['Value']:
                 r = gConfig.getOptionsDict(cfgPath(cfgBase, s))
-                if not r['OK'] or 'Host' not in r:
+                if not r['OK'] or 'Host' not in r['Value']:
                     continue
-            self[r['Host']] = s
+            self[r['Value']['Host']] = s
         
         
     def nextValidName(self, pattern):
@@ -314,7 +321,7 @@ def checkUnusedSEs(vo, host=None):
     
     changeSet = _configSet()
     cfgBase = '/Resources/StorageElements'
-    mapping=SiteNamingDict(cfgBase)    
+    mapping = SiteNamingDict(cfgBase)
     for se, se_info in ses.iteritems():
         bdii_site_id = se_info.get('GlueSiteUniqueID')
         site = mapping.setdefault(se, mapping.nextValidName(bdii_site_id))
