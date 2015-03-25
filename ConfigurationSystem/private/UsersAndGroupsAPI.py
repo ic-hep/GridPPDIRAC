@@ -218,8 +218,8 @@ class UsersAndGroupsAPI(object):
             if not new_groups:
                 obsoleteUsers.add(user_nick)
 
-            user['Groups'] = list(new_groups)
-            user['Email'] = ','.join(user.get('Email', ''))
+            user['Groups'] = sorted(new_groups)
+            user['Email'] = ', '.join(sorted(user.get('Email', [])))
             result = csapi.modifyUser(user_nick, user,
                                       createIfNonExistant=True)
             if not result['OK']:
