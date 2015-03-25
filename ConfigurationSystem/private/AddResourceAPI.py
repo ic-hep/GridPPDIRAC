@@ -81,11 +81,11 @@ class _configSet(set):
         '''
         old_value = gConfig.getValue(cfgPath(section, option), None)
         if append and old_value:
-            if isinstance(new_value, (list, set)):
-                ovlist = set(old_value.split(', '))
-                new_value = ', '.join(sorted(ovlist.update(new_value)))
+            old_set = set(old_value.split(', '))
+            if isinstance(new_value, (list, set, tuple)):
+                new_value = ', '.join(sorted(old_set.update(new_value)))
             else:
-                new_value = old_value + new_value
+                new_value = ', '.join(sorted(old_set.add(new_value)))
         super(_configSet, self).add((section,
                                     option,
                                     old_value,
