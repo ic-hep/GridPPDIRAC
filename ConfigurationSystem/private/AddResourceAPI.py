@@ -6,18 +6,19 @@ import os
 import re
 from urlparse import urlparse
 from DIRAC import gLogger, gConfig, S_OK, S_ERROR
-from DIRAC.ConfigurationSystem.Client.Utilities import (getGridCEs,
-                                                        getSiteUpdates,
-                                                        getCEsFromCS,
-                                                        getGridSRMs,
-                                                        getSRMUpdates
-                                                        )
-from DIRAC.Core.Utilities.SitesDIRACGOCDBmapping import getDIRACSiteName
+#from DIRAC.ConfigurationSystem.Client.Utilities import (getGridCEs,
+#                                                        getSiteUpdates,
+#                                                        getCEsFromCS,
+#                                                        getGridSRMs,
+#                                                        getSRMUpdates
+#                                                        )
+#from DIRAC.Core.Utilities.SitesDIRACGOCDBmapping import getDIRACSiteName
 from DIRAC.ConfigurationSystem.Client.CSAPI import CSAPI
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
-from DIRAC.Core.Utilities.Pfn import pfnparse
-from DIRAC.Core.Utilities.Grid import getBdiiCEInfo, getBdiiSEInfo, ldapSE, ldapService, ldapsearchBDII
-from DIRAC.ConfigurationSystem.Client.Helpers.Registry import getVOs
+#from DIRAC.Core.Utilities.Pfn import pfnparse
+#from DIRAC.ConfigurationSystem.Client.Helpers.Registry import getVOs
+from DIRAC.Core.Utilities.Grid import (getBdiiCEInfo, getBdiiSEInfo, ldapSE,
+                                       ldapService, ldapsearchBDII)
 
 
 __all__ = ['checkUnusedCEs', 'checkUnusedSEs']
@@ -50,7 +51,7 @@ def _updateCS(changeSet):
     gLogger.notice('We are about to make the following changes to CS:')
 
     for section, option, value, new_value in changeList:
-        if value == new_value:
+        if value == new_value:  # shouldn't be case now we sort above
             continue
         if value == 'Unknown' or not value:
             gLogger.notice("Setting %s/%s:   -> %s"
@@ -99,6 +100,7 @@ class _configSet(set):
 #                 "be determined from BDII" % ce)
 #    return ' '.join((os_name, os_version, os_release)).strip()
 
+
 def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
     '''
     Check for unused CEs and add them where possible
@@ -123,13 +125,13 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
 #        if result['OK']:
 #            ceBdiiDict = result['Value']
 #            break
-        
+
     #result = getGridCEs(vo, bdiiInfo=ceBdiiDict, ceBlackList=knownCEs)
     #if not result['OK']:
     #    gLogger.error('ERROR: failed to get CEs from BDII', result['Message'])
     #    return S_ERROR('failed to get CEs from BDII')
     #ceBdiiDict = result['BdiiInfo']
-    result  = getBdiiCEInfo(vo, host=host)
+    result = getBdiiCEInfo(vo, host=host)
     if not result['OK']:
         gLogger.error("Problem getting BDII info")
         return result
@@ -140,7 +142,8 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
     changeSet = _configSet()
     for site, site_info in ceBdiiDict.iteritems():
         diracSite = '.'.join((domain, site))
-        countryCodes = (ce.split('.')[-1].strip() for ce in site_info.get('CEs', {}).iterkeys())
+        countryCodes = (ce.split('.')[-1].strip()
+                        for ce in site_info.get('CEs', {}).iterkeys())
         for countryCode in countryCodes:
             if countryCode == 'gov':
                 diracSite = '.'.join((diracSite, 'us'))
@@ -150,13 +153,13 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
                 break
         else:
             diracSite = '.'.join((diracSite, country_default))
-            
+
         if diracSite is None:
             gLogger.warn("Couldn't form a valid DIRAC name for site %s" % site)
             continue
 
         sitePath = cfgPath(cfgBase, diracSite)
-        
+
         name = site_info.get('GlueSiteName').strip()
         description = site_info.get('GlueSiteDescription').strip()
         latitude = site_info.get('GlueSiteLatitude').strip()
@@ -165,28 +168,26 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
                         .replace('mailto:', '')\
                         .strip()
 
-                                
         ce_list = set()
         for ce, ce_info in site_info.get('CEs', {}).iteritems():
             ce_path = cfgPath(sitePath, 'CEs', ce)
             ce_list.add(ce)
-            
+
             arch = ce_info.get('GlueHostArchitecturePlatformType', '')
             si00 = ce_info.get('GlueHostBenchmarkSI00', '')
             ram = ce_info.get('GlueHostMainMemoryRAMSize', '')
             os_name = ce_info.get('GlueHostOperatingSystemName', '')
             os_version = ce_info.get('GlueHostOperatingSystemVersion', '')
             os_release = ce_info.get('GlueHostOperatingSystemRelease', '')
-                
 
             for queue, queue_info in ce_info.get('Queues', {}).iteritems():
                 queue_path = cfgPath(ce_path, 'Queues', queue)
-                
+
                 ce_type = queue_info.get('GlueCEImplementationName', '')
                 max_cpu_time = queue_info.get('GlueCEPolicyMaxCPUTime')
-                vos = set((rule.replace('VO:','')
-                          for rule in queue_info.get('GlueCEAccessControlBaseRule')
-                          if rule.startswith('VO:')))
+                acbr = queue_info.get('GlueCEAccessControlBaseRule')
+                vos = set((rule.replace('VO:', '') for rule in acbr
+                           if rule.startswith('VO:')))
                 q_si00 = ''
                 capability = queue_info.get('GlueCECapability', [])
                 if isinstance(capability, basestring):
@@ -195,11 +196,10 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
                     if 'CPUScalingReferenceSI00' in i:
                         q_si00 = i.split('=')[-1].strip()
                         break
-                    
+
                 total_cpus = int(queue_info.get('GlueCEInfoTotalCPUs', 0))
-                max_total_jobs =  min(1000, int(total_cpus/2))
-                max_waiting_jobs =  max(2, int(max_total_jobs * 0.1))
-                    
+                max_total_jobs = min(1000, int(total_cpus/2))
+                max_waiting_jobs = max(2, int(max_total_jobs * 0.1))
 
                 changeSet.add(queue_path, 'VO', vos, append=True)
                 changeSet.add(queue_path, 'SI00', q_si00)
@@ -224,13 +224,15 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
         changeSet.add(sitePath, 'CE', ce_list, append=True)
     return _updateCS(changeSet)
 
+
 class SiteNamingDict(dict):
+    '''Dict for site names'''
     def __init__(self, cfgBase):
         super(SiteNamingDict, self).__init__()
         result = gConfig.getSections(cfgBase)
         if not result['OK']:
-            raise Exeption("Couldn't get current CS list of SEs")
-        
+            raise Exception("Couldn't get current CS list of SEs")
+
         for s in result['Value']:
             r = gConfig.getOptionsDict(cfgPath(cfgBase, s, 'AccessProtocol.1'))
             if not r['OK'] or 'Host' not in r['Value']:
@@ -238,8 +240,7 @@ class SiteNamingDict(dict):
                 if not r['OK'] or 'Host' not in r['Value']:
                     continue
             self[r['Value']['Host']] = s
-        
-        
+
     def nextValidName(self, pattern):
         '''Return next valid DIRAC id from CN'''
         count = -1
@@ -255,17 +256,19 @@ class SiteNamingDict(dict):
         if count == -1:
             return pattern + '-disk'
         return pattern + str(count + 1) + '-disk'
-    
+
 
 def _ldap_vo_info(vo_name, host=None):
+    '''function for getting VO SE path info'''
     vo_filter = '(GlueVOInfoAccessControlBaseRule=VOMS:/%s/*)' % vo_name
     vo_filter += '(GlueVOInfoAccessControlBaseRule=VOMS:/%s)' % vo_name
     vo_filter += '(GlueVOInfoAccessControlBaseRule=VO:%s)' % vo_name
     filt = '(&(objectClass=GlueVOInfo)(|%s))' % vo_filter
-    result = ldapsearchBDII(filt=filt)
+    result = ldapsearchBDII(filt=filt, host=host)
     if not result['OK']:
         return result
-    paths_mapping={}
+
+    paths_mapping = {}
     for se_info in result['Value']:
         if 'attr' not in se_info:
             continue
@@ -273,16 +276,16 @@ def _ldap_vo_info(vo_name, host=None):
             continue
         for elem in se_info['attr']['GlueChunkKey']:
             if 'GlueSEUniqueID=' in elem:
-                paths_mapping.setdefault(elem.replace('GlueSEUniqueID=',''),
+                paths_mapping.setdefault(elem.replace('GlueSEUniqueID=', ''),
                                          set())\
                              .add(se_info['attr']['GlueVOInfoPath'])
 
     ret = {}
     for se_name, vo_info_paths in paths_mapping.iteritems():
         sorted_paths = sorted(vo_info_paths, key=len)
-        len_chk = len(set((len(path) for path in vo_info_paths)))\
-                  != len(vo_info_paths)
-        if len(vo_info_paths) > 1 and len_chk:
+        len_orig = len(vo_info_paths)
+        len_unique = len(set((len(path) for path in vo_info_paths)))
+        if len_orig > 1 and len_unique != len_orig:
             gLogger.warn("There are multiple GlueVOInfoPath entries with the "
                          "same length for se: %s vo: %s, i.e. %s we will use "
                          "the first." % (se_name, vo_name, sorted_paths))
@@ -293,6 +296,7 @@ def _ldap_vo_info(vo_name, host=None):
             ret[se_name].update({'VOPath': norm_path})
     return S_OK(ret)
 
+
 def checkUnusedSEs(vo, host=None):
     '''
     Check for unused SEs
@@ -300,25 +304,24 @@ def checkUnusedSEs(vo, host=None):
     vo                - The VO
     host              - BDII host default, default = 'lcg-bdii.cern.ch:2170'
     '''
-    
-    result = ldapSE( '*', vo=vo, host=host)
+    result = ldapSE('*', vo=vo, host=host)
     if not result['OK']:
-      return result
-    ses = dict(((i['GlueSEUniqueID'], i)  for i in result['Value']
+        return result
+    ses = dict(((i['GlueSEUniqueID'], i) for i in result['Value']
                 if 'GlueSEUniqueID' in i))
- 
-    result = ldapService( serviceType='SRM', vo=vo, host=host)
+
+    result = ldapService(serviceType='SRM', vo=vo, host=host)
     if not result['OK']:
-      return result
+        return result
     srms = dict(((urlparse(i['GlueServiceEndpoint']).hostname, i)
                 for i in result['Value'] if 'GlueServiceEndpoint' in i
                 and urlparse(i['GlueServiceEndpoint']).hostname in ses))
-    
+
     result = _ldap_vo_info(vo, host=host)
     if not result['OK']:
         return result
     vo_info = result['Value']
-    
+
     changeSet = _configSet()
     cfgBase = '/Resources/StorageElements'
     mapping = SiteNamingDict(cfgBase)
@@ -330,7 +333,7 @@ def checkUnusedSEs(vo, host=None):
         accessSection = cfgPath(seSection, 'AccessProtocol.1')
         vopathSection = cfgPath(accessSection, 'VOPath')
         hostSection = seSection
-        
+
         backend_type = se_info.get('GlueSEImplementationName', 'Unknown')
         description = se_info.get('GlueSEName')
         total_size = se_info.get('GlueSETotalOnlineSize', 'Unknown')
@@ -338,7 +341,7 @@ def checkUnusedSEs(vo, host=None):
         if not isinstance(base_rules, list):
             base_rules = [base_rules]
         bdiiVOs = set([re.sub('^VO:', '', rule) for rule in base_rules])
-        
+
         srmDict = srms.get(se)
         if srmDict:
             hostSection = accessSection
@@ -346,7 +349,7 @@ def checkUnusedSEs(vo, host=None):
             if not version.startswith('2'):
                 gLogger.warn("Not SRM version 2")
                 continue
-            
+
             url = urlparse(srmDict.get('GlueServiceEndpoint', ''))
             port = str(url.port)
             if port is None:
@@ -356,12 +359,12 @@ def checkUnusedSEs(vo, host=None):
             ## DIRACs Bdii2CSAgent used the ServiceAccessControlBaseRule value
             bdiiVOs = set([re.sub('^VO:', '', rule) for rule in
                            srmDict.get('GlueServiceAccessControlBaseRule', [])
-                           ])            
-            
+                           ])
+
             old_path = gConfig.getValue(cfgPath(accessSection, 'Path'), None)
             path = vo_info.get(se, {}).get('Path')
             vo_path = vo_info.get(se, {}).get('VOPath')
-            
+
             # If path is different from last VO then we just default the
             # path to / and use the VOPath dict
             if old_path and path and path != old_path:
@@ -370,7 +373,6 @@ def checkUnusedSEs(vo, host=None):
 
             if vo_path:
                 changeSet.add(vopathSection, vo, vo_path)
-            
 
             changeSet.add(accessSection, 'Protocol', 'srm')
             changeSet.add(accessSection, 'ProtocolName', 'SRM2')
@@ -385,7 +387,6 @@ def checkUnusedSEs(vo, host=None):
         changeSet.add(seSection, 'Description', description)
         changeSet.add(seSection, 'VO', ', '.join(sorted(bdiiVOs)))
         changeSet.add(seSection, 'TotalSize', total_size)
-
 
     return _updateCS(changeSet)
 
@@ -448,4 +449,3 @@ if __name__ == '__main__':
 #    if not result['OK']:
 #        gLogger.error("Error while updating sites", result['Message'])
 #        sys.exit(1)
-
