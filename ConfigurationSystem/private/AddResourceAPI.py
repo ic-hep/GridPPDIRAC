@@ -214,7 +214,10 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
             changeSet.add(ce_path, 'CEType', ce_type)
             changeSet.add(ce_path, 'OS', 'EL%s'
                                          % os_release.split('.')[0].strip())
-            if 'ARC' in ce_type or 'CREAM' in ce_type:
+            if 'ARC' in ce_type:
+                changeSet.add(ce_path, 'SubmissionMode', 'Direct')
+                changeSet.add(ce_path, 'JobListFile', '%s-jobs.xml' % ce)
+            elif 'CREAM' in ce_type:
                 changeSet.add(ce_path, 'SubmissionMode', 'Direct')
 
         changeSet.add(sitePath, 'Name', name)
