@@ -84,9 +84,10 @@ class _configSet(set):
         if append and old_value:
             old_set = set(old_value.split(', '))
             if isinstance(new_value, (list, set, tuple)):
-                new_value = ', '.join(sorted(old_set.update(new_value)))
+                old_set.update(new_value)
             else:
-                new_value = ', '.join(sorted(old_set.add(new_value)))
+                old_set.add(new_value)
+            new_value = ', '.join(sorted(old_set))
         super(_configSet, self).add((section,
                                     option,
                                     old_value,
