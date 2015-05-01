@@ -84,9 +84,10 @@ class _configSet(set):
         if append and old_value:
             old_set = set(old_value.split(', '))
             if isinstance(new_value, (list, set, tuple)):
-                new_value = ', '.join(sorted(old_set.update(new_value)))
+                old_set.update(new_value)
             else:
-                new_value = ', '.join(sorted(old_set.add(new_value)))
+                old_set.add(new_value)
+            new_value = ', '.join(sorted(old_set))
         super(_configSet, self).add((section,
                                     option,
                                     old_value,
@@ -214,7 +215,10 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
             changeSet.add(ce_path, 'CEType', ce_type)
             changeSet.add(ce_path, 'OS', 'EL%s'
                                          % os_release.split('.')[0].strip())
-            if 'ARC' in ce_type or 'CREAM' in ce_type:
+            if 'ARC' in ce_type:
+                changeSet.add(ce_path, 'SubmissionMode', 'Direct')
+                changeSet.add(ce_path, 'JobListFile', '%s-jobs.xml' % ce)
+            elif 'CREAM' in ce_type:
                 changeSet.add(ce_path, 'SubmissionMode', 'Direct')
 
         changeSet.add(sitePath, 'Name', name)
