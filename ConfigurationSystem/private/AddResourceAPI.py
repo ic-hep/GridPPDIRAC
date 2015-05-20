@@ -212,6 +212,10 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
                 changeSet.add(queue_path, 'MaxWaitingJobs',
                               str(max_waiting_jobs))
 
+            # The CEType needs to be "ARC" but the BDII contains "ARC-CE"
+            if ce_type == 'ARC-CE':
+              ce_type = 'ARC'
+
             changeSet.add(ce_path, 'architecture', arch)
             changeSet.add(ce_path, 'SI00', si00)
             changeSet.add(ce_path, 'HostRAM', ram)
