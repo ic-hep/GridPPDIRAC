@@ -88,6 +88,9 @@ class _configSet(set):
             else:
                 old_set.add(new_value)
             new_value = ', '.join(sorted(old_set))
+        # Config system needs hashable items, so we need strings here
+        if isinstance(new_value, (list, set)):
+            new_value = ', '.join(sorted(new_value)
         super(_configSet, self).add((section,
                                     option,
                                     old_value,
