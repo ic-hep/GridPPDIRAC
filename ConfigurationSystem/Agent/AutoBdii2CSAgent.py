@@ -16,7 +16,8 @@ __RCSID__ = "$Id$"
 from DIRAC import S_OK
 from DIRAC.ConfigurationSystem.Agent.Bdii2CSAgent import Bdii2CSAgent
 from GridPPDIRAC.ConfigurationSystem.private.AddResourceAPI import (checkUnusedCEs,
-                                                                    checkUnusedSEs)
+                                                                    checkUnusedSEs,
+                                                                    removeOldCEs)
 
 
 class AutoBdii2CSAgent(Bdii2CSAgent):
@@ -43,6 +44,8 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
         self.domain = self.am_getOption('Domain', 'LCG')
         self.country_default = self.am_getOption('CountryCodeDefault', 'xx')
         self.bdii_host = self.am_getOption('BDIIHost', None)
+        self.removeOldCEs = self.am_getOption('RemoveOldCEs', True)
+        self.ce_removal_threshold = self.am_getOption('CERemovalThreshold', 5)
         return Bdii2CSAgent.initialize(self)
 
     def execute(self):
@@ -70,5 +73,10 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
                                    "in the VO %s: %s"
                                    % (vo, result['Message']))
                     continue
+        if self.removeOldCEs:
+            result = removeOldCEs(self.ce_removal_threshold, self.domain)
+            if not result['OK']:
+                self.log.error("Error while running removal of old CEs: "
+                               "%s" % result['Message'])
 
         return S_OK()
