@@ -31,7 +31,10 @@ __all__ = ['checkUnusedCEs', 'checkUnusedSEs', 'removeOldCEs']
 
 
 class _ConfigurationSystem(CSAPI):
+    """ Class to smartly wrap the functionality of the CS"""
+
     def __init__(self):
+        """initialise"""
         CSAPI.__init__(self)
         self._num_changes = 0
         self.initialize()
@@ -41,6 +44,19 @@ class _ConfigurationSystem(CSAPI):
             raise RuntimeError(result['Message'])   
 
     def add(self, section, option, new_value):
+        """
+        Add a value into the configuration system.
+
+        This method will overwrite any existing option's value.
+
+        Args:
+            section (str): The section
+            option (str): The option to be created/modified
+            new_value: The value to be assigned
+
+        Example:
+            >>> _ConfigurationSystem().add('/Registry', 'DefaultGroup', 'dteam_user')
+        """
         if isinstance(new_value, (tuple, list, set, GeneratorType)):
             new_value = ', '.join(sorted(map(str, new_value)))
         else:
@@ -61,6 +77,12 @@ class _ConfigurationSystem(CSAPI):
         self._num_changes+=1
 
     def append_unique(self, section, option, new_value):
+        """
+        Append a value onto the end of an existing CS option.
+
+        This method is like append except that it ensures that the final list
+        of values for the given option only contains unique entries.
+        """
         old_values = set(v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v)
 
         if isinstance(new_value, (tuple, list, set)):
@@ -70,6 +92,13 @@ class _ConfigurationSystem(CSAPI):
         self.add(section, option, old_values)
 
     def append(self, section, option, new_value):
+        """
+        Append a value onto the end of an existing CS option.
+
+        This method is like add with the exception that the new value
+        is appended on to the end of the list of values associated
+        with that option.
+        """
         old_values = [v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v]
 
         if isinstance(new_value, (tuple, list, set)):
@@ -79,6 +108,20 @@ class _ConfigurationSystem(CSAPI):
         self.add(section, option, old_values)
             
     def remove(self, section, option=None):
+        """
+        Remove a section/option from the configuration system.
+
+        This method will remove the specified section if the option argument
+        is None (default). If the option argument is given then that option
+        (formed of section/option) is removed.
+
+        Args:
+            section (str): The section
+            option (str): [optional] The option
+
+        Example:
+            >>> _ConfigurationSystem().remove('/Registry', 'DefaultGroup')
+        """
         if option is None:
             gLogger.notice("Removing section %s" % section)
             self.delSection(section)
@@ -88,6 +131,12 @@ class _ConfigurationSystem(CSAPI):
         self._num_changes+=1
 
     def commit(self):
+        """
+        Commit the changes to the configuration system.
+
+        Returns:
+            dict: S_OK/S_ERROR DIRAC style dicts
+        """
         result = CSAPI.commit(self)
         if not result['OK']:
             gLogger.error("Error while commit to CS", result['Message'])
