@@ -4,7 +4,7 @@ API for adding resources to CS
 """
 import os
 import re
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from types import GeneratorType
 from urlparse import urlparse
 from DIRAC import gLogger, gConfig, S_OK, S_ERROR
