@@ -4,105 +4,162 @@ API for adding resources to CS
 """
 import os
 import re
+from datetime import datetime, date, timedelta
+from types import GeneratorType
 from urlparse import urlparse
 from DIRAC import gLogger, gConfig, S_OK, S_ERROR
-#from DIRAC.ConfigurationSystem.Client.Utilities import (getGridCEs,
-#                                                        getSiteUpdates,
-#                                                        getCEsFromCS,
-#                                                        getGridSRMs,
-#                                                        getSRMUpdates
-#                                                        )
-#from DIRAC.Core.Utilities.SitesDIRACGOCDBmapping import getDIRACSiteName
 from DIRAC.ConfigurationSystem.Client.CSAPI import CSAPI
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
-#from DIRAC.Core.Utilities.Pfn import pfnparse
-#from DIRAC.ConfigurationSystem.Client.Helpers.Registry import getVOs
-from DIRAC.Core.Utilities.Grid import (getBdiiCEInfo, getBdiiSEInfo, ldapSE,
+from DIRAC.Core.Utilities.Grid import (getBdiiCEInfo, ldapSE,
                                        ldapService, ldapsearchBDII)
 
 
-__all__ = ['checkUnusedCEs', 'checkUnusedSEs']
+__all__ = ['checkUnusedCEs', 'checkUnusedSEs', 'removeOldCEs']
 
 
-#VER_RE = re.compile(r"(?P<major_revision>[0-9])\.[0-9]+")
+class _ConfigurationSystem(CSAPI):
+    """ Class to smartly wrap the functionality of the CS"""
 
+    def __init__(self):
+        """initialise"""
+        CSAPI.__init__(self)
+        self._num_changes = 0
+        result = self.initialize()
+        if not result['OK']:
+            gLogger.error('Failed to initialise CSAPI object',
+                          result['Message'])
+            raise RuntimeError(result['Message'])
 
-def _updateCS(changeSet):
-    '''
-    update CS
-    '''
-    csAPI = CSAPI()
-    csAPI.initialize()
-    result = csAPI.downloadCSData()
-    if not result['OK']:
-        gLogger.error('Failed to initialise CSAPI object', result['Message'])
-        return S_ERROR('Failed to initialise CSAPI object')
+    def add(self, section, option, new_value):
+        """
+        Add a value into the configuration system.
 
-    # remove cases where old [2] and new [3] values are the same
-    # sort from set/generator/iterable into list
-    changeList = sorted((i for i in changeSet if i[2] != i[3]))
+        This method will overwrite any existing option's value.
 
-    if not len(changeList):
-        gLogger.notice('No changes required')
-        return S_OK()
+        Args:
+            section (str): The section
+            option (str): The option to be created/modified
+            new_value: The value to be assigned
 
-    gLogger.notice('Updating the CS...')
-    gLogger.notice('------------------')
-    gLogger.notice('We are about to make the following changes to CS:')
+        Example:
+            >>> cs = _ConfigurationSystem()
+            >>> cs.add('/Registry', 'DefaultGroup', 'dteam_user')
+        """
+        if isinstance(new_value, (tuple, list, set, GeneratorType)):
+            new_value = ', '.join(sorted(map(str, new_value)))
+        else:
+            new_value = str(new_value)
 
-    for section, option, value, new_value in changeList:
-        if value == new_value:  # shouldn't be case now we sort above
-            continue
-        if value == 'Unknown' or not value:
+        old_value = gConfig.getValue(cfgPath(section, option), None)
+        if old_value == new_value:
+            return
+
+        if old_value is None:
             gLogger.notice("Setting %s/%s:   -> %s"
                            % (section, option, new_value))
-            csAPI.setOption(cfgPath(section, option), new_value)
+            self.setOption(cfgPath(section, option), new_value)
         else:
             gLogger.notice("Modifying %s/%s:   %s -> %s"
-                           % (section, option, value, new_value))
-            csAPI.modifyValue(cfgPath(section, option), new_value)
+                           % (section, option, old_value, new_value))
+            self.modifyValue(cfgPath(section, option), new_value)
+        self._num_changes += 1
 
-    result = csAPI.commit()
+    def append_unique(self, section, option, new_value):
+        """
+        Append a value onto the end of an existing CS option.
+
+        This method is like append except that it ensures that the final list
+        of values for the given option only contains unique entries.
+        """
+        old_values = set(v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v)
+
+        if isinstance(new_value, (tuple, list, set)):
+            old_values.update(map(str, new_value))
+        else:
+            old_values.add(str(new_value))
+        self.add(section, option, old_values)
+
+    def append(self, section, option, new_value):
+        """
+        Append a value onto the end of an existing CS option.
+
+        This method is like add with the exception that the new value
+        is appended on to the end of the list of values associated
+        with that option.
+        """
+        old_values = [v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v]
+
+        if isinstance(new_value, (tuple, list, set)):
+            old_values.extend(new_value)
+        else:
+            old_values.append(new_value)
+        self.add(section, option, old_values)
+
+    def remove(self, section, option=None):
+        """
+        Remove a section/option from the configuration system.
+
+        This method will remove the specified section if the option argument
+        is None (default). If the option argument is given then that option
+        (formed of section/option) is removed.
+
+        Args:
+            section (str): The section
+            option (str): [optional] The option
+
+        Example:
+            >>> _ConfigurationSystem().remove('/Registry', 'DefaultGroup')
+        """
+        if option is None:
+            gLogger.notice("Removing section %s" % section)
+            self.delSection(section)
+        else:
+            gLogger.notice("Removing option %s/%s" % (section, option))
+            self.delOption(cfgPath(section, option))
+        self._num_changes += 1
+
+    def commit(self):
+        """
+        Commit the changes to the configuration system.
+
+        Returns:
+            dict: S_OK/S_ERROR DIRAC style dicts
+        """
+        result = CSAPI.commit(self)
+        if not result['OK']:
+            gLogger.error("Error while commit to CS", result['Message'])
+            return S_ERROR("Error while commit to CS")
+        if self._num_changes:
+            gLogger.notice("Successfully committed %d changes to CS\n"
+                           % self._num_changes)
+            self._num_changes = 0
+            return S_OK()
+        gLogger.notice("No changes to commit")
+        return S_OK()
+
+
+def removeOldCEs(threshold=5, domain='LCG'):
+    '''
+    Remove CEs that have not been seen for a given time
+    '''
+    cs = _ConfigurationSystem()
+    result = cs.getCurrentCFG()
     if not result['OK']:
-        gLogger.error("Error while commit to CS", result['Message'])
-        return S_ERROR("Error while commit to CS")
-    gLogger.notice("Successfully committed %d changes to CS\n"
-                   % len(changeList))
-    return S_OK()
-
-
-class _configSet(set):
-    '''
-    Wrapper class around set to provide a nicer add syntax
-    and also to get the element in the form expected for _updateCS
-    '''
-    def add(self, section, option, new_value, append=False):
-        '''
-        Overrides base class add giving nicer syntax for our needs
-        '''
-        old_value = gConfig.getValue(cfgPath(section, option), None)
-        if append and old_value:
-            old_set = set(old_value.split(', '))
-            if isinstance(new_value, (list, set, tuple)):
-                old_set.update(new_value)
-            else:
-                old_set.add(new_value)
-            new_value = ', '.join(sorted(old_set))
-        # Config system needs hashable items, so we need strings here
-        if isinstance(new_value, (list, set)):
-            new_value = ', '.join(sorted(new_value))
-        super(_configSet, self).add((section,
-                                    option,
-                                    old_value,
-                                    new_value))
-
-#def _map_os_ver(ce, os_name, os_version, os_release):
-#    match = VER_RE.search(os_release)
-#    if match:
-#       return 'EL%s' % match.group('major_revision')
-#    gLogger.warn("OS version information for ce '%s' cannot"
-#                 "be determined from BDII" % ce)
-#    return ' '.join((os_name, os_version, os_release)).strip()
+        gLogger.error('Could not get current sites from the CS')
+        return result
+    base_path = cfgPath('/Resources/Sites', domain)
+    site_dict = result['Value'].getAsDict(base_path)
+    for site, site_info in site_dict.iteritems():
+        site_path = cfgPath(base_path, site)
+        for ce, ce_info in site_info.get('CEs', {}).iteritems():
+            ce_path = cfgPath(site_path, 'CEs', ce)
+            if 'LastSeen' not in ce_info:
+                gLogger.debug("No LastSeen info for CE: %s at site: %s" % (ce, site))
+                continue
+            last_seen = datetime.strptime(ce_info['LastSeen'], '%d/%m/%Y').date()
+            if date.today() - last_seen > timedelta(days=threshold):
+                cs.remove(section=ce_path)
+    return cs.commit()
 
 
 def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
@@ -115,36 +172,16 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
     country_default   - the default country code to use to substitute into
                         the dirac site name
     '''
-    ## Get list of already known CEs from the CS
-#    result = getCEsFromCS()
-#    if not result['OK']:
-#        gLogger.error('ERROR: failed to get CEs from CS', result['Message'])
-#        return S_ERROR('failed to get CEs from CS')
-#    knownCEs = result['Value']
-
-    ## Now get from the BDII a list of ces that are not known i.e. new
-#    ceBdiiDict = None
-#    for host in alternative_bdii or []:
-#        result = getBdiiCEInfo(vo, host)
-#        if result['OK']:
-#            ceBdiiDict = result['Value']
-#            break
-
-    #result = getGridCEs(vo, bdiiInfo=ceBdiiDict, ceBlackList=knownCEs)
-    #if not result['OK']:
-    #    gLogger.error('ERROR: failed to get CEs from BDII', result['Message'])
-    #    return S_ERROR('failed to get CEs from BDII')
-    #ceBdiiDict = result['BdiiInfo']
     result = getBdiiCEInfo(vo, host=host)
     if not result['OK']:
         gLogger.error("Problem getting BDII info")
         return result
     ceBdiiDict = result['Value']
 
-    ## now add the new resources
+    # now add the new resources
     cfgBase = "/Resources/Sites/%s" % domain
-    changeSet = _configSet()
-    for site, site_info in ceBdiiDict.iteritems():
+    changeSet = _ConfigurationSystem()
+    for site, site_info in sorted(ceBdiiDict.iteritems()):
         diracSite = '.'.join((domain, site))
         countryCodes = (ce.split('.')[-1].strip()
                         for ce in site_info.get('CEs', {}).iterkeys())
@@ -173,7 +210,7 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
                         .strip()
 
         ce_list = set()
-        for ce, ce_info in site_info.get('CEs', {}).iteritems():
+        for ce, ce_info in sorted(site_info.get('CEs', {}).iteritems()):
             ce_path = cfgPath(sitePath, 'CEs', ce)
             ce_list.add(ce)
 
@@ -184,7 +221,7 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
             os_version = ce_info.get('GlueHostOperatingSystemVersion', '')
             os_release = ce_info.get('GlueHostOperatingSystemRelease', '')
 
-            for queue, queue_info in ce_info.get('Queues', {}).iteritems():
+            for queue, queue_info in sorted(ce_info.get('Queues', {}).iteritems()):
                 queue_path = cfgPath(ce_path, 'Queues', queue)
 
                 ce_type = queue_info.get('GlueCEImplementationName', '')
@@ -205,23 +242,23 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
                 max_total_jobs = min(1000, int(total_cpus/2))
                 max_waiting_jobs = max(2, int(max_total_jobs * 0.1))
 
-                changeSet.add(queue_path, 'VO', vos, append=True)
+                changeSet.append_unique(queue_path, 'VO', vos)
                 changeSet.add(queue_path, 'SI00', q_si00)
                 changeSet.add(queue_path, 'maxCPUTime', max_cpu_time)
-                changeSet.add(queue_path, 'MaxTotalJobs', str(max_total_jobs))
-                changeSet.add(queue_path, 'MaxWaitingJobs',
-                              str(max_waiting_jobs))
+                changeSet.add(queue_path, 'MaxTotalJobs', max_total_jobs)
+                changeSet.add(queue_path, 'MaxWaitingJobs', max_waiting_jobs)
 
             # The CEType needs to be "ARC" but the BDII contains "ARC-CE"
             if ce_type == 'ARC-CE':
-              ce_type = 'ARC'
+                ce_type = 'ARC'
 
+            changeSet.add(ce_path, 'LastSeen', date.today().strftime('%d/%m/%Y'))
             changeSet.add(ce_path, 'architecture', arch)
             changeSet.add(ce_path, 'SI00', si00)
             changeSet.add(ce_path, 'HostRAM', ram)
             changeSet.add(ce_path, 'CEType', ce_type)
             changeSet.add(ce_path, 'OS', 'EL%s'
-                                         % os_release.split('.')[0].strip())
+                          % os_release.split('.')[0].strip())
             if 'ARC' in ce_type:
                 changeSet.add(ce_path, 'SubmissionMode', 'Direct')
                 changeSet.add(ce_path, 'JobListFile', '%s-jobs.xml' % ce)
@@ -232,8 +269,8 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
         changeSet.add(sitePath, 'Description', description)
         changeSet.add(sitePath, 'Coordinates', '%s:%s' % (longitude, latitude))
         changeSet.add(sitePath, 'Mail', mail)
-        changeSet.add(sitePath, 'CE', ce_list, append=True)
-    return _updateCS(changeSet)
+        changeSet.append_unique(sitePath, 'CE', ce_list)
+    return changeSet.commit()
 
 
 class SiteNamingDict(dict):
@@ -256,7 +293,7 @@ class SiteNamingDict(dict):
         '''Return next valid DIRAC id from CN'''
         count = -1
         r = re.compile('%s(?P<se_index>[0-9]*?)-disk' % pattern)
-        ## faster implementation than max
+        # faster implementation than max
         for u in self.itervalues():
             match = r.match(u)
             if match:
@@ -325,18 +362,18 @@ def checkUnusedSEs(vo, host=None):
     if not result['OK']:
         return result
     srms = dict(((urlparse(i['GlueServiceEndpoint']).hostname, i)
-                for i in result['Value'] if 'GlueServiceEndpoint' in i
-                and urlparse(i['GlueServiceEndpoint']).hostname in ses))
+                 for i in result['Value'] if 'GlueServiceEndpoint' in i
+                 and urlparse(i['GlueServiceEndpoint']).hostname in ses))
 
     result = _ldap_vo_info(vo, host=host)
     if not result['OK']:
         return result
     vo_info = result['Value']
 
-    changeSet = _configSet()
+    changeSet = _ConfigurationSystem()
     cfgBase = '/Resources/StorageElements'
     mapping = SiteNamingDict(cfgBase)
-    for se, se_info in ses.iteritems():
+    for se, se_info in sorted(ses.iteritems()):
         bdii_site_id = se_info.get('GlueSiteUniqueID')
         site = mapping.setdefault(se, mapping.nextValidName(bdii_site_id))
 
@@ -367,7 +404,7 @@ def checkUnusedSEs(vo, host=None):
                 gLogger.warn("No port determined for %s" % se)
                 continue
 
-            ## DIRACs Bdii2CSAgent used the ServiceAccessControlBaseRule value
+            # DIRACs Bdii2CSAgent used the ServiceAccessControlBaseRule value
             bdiiVOs = set([re.sub('^VO:', '', rule) for rule in
                            srmDict.get('GlueServiceAccessControlBaseRule', [])
                            ])
@@ -396,10 +433,10 @@ def checkUnusedSEs(vo, host=None):
         changeSet.add(hostSection, 'Host', se)
         changeSet.add(seSection, 'BackendType', backend_type)
         changeSet.add(seSection, 'Description', description)
-        changeSet.add(seSection, 'VO', ', '.join(sorted(bdiiVOs)))
+        changeSet.add(seSection, 'VO', bdiiVOs)
         changeSet.add(seSection, 'TotalSize', total_size)
 
-    return _updateCS(changeSet)
+    return changeSet.commit()
 
 if __name__ == '__main__':
     import sys
@@ -446,6 +483,16 @@ if __name__ == '__main__':
                       result['Message'])
         sys.exit(1)
     seBdii = result['Value']
+
+    gLogger.notice('')
+    gLogger.notice('** Checking for old sites')
+    gLogger.notice('-------------------------')
+
+    result = removeOldCEs(domain=options.domain)
+    if not result['OK']:
+        gLogger.error("Error while running check for old sites:",
+                      result['Message'])
+        sys.exit(1)
 
 #    gLogger.notice('')
 #    gLogger.notice('-------------------------------------------------------')
