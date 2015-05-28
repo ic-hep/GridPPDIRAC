@@ -153,12 +153,12 @@ def removeOldCEs(threshold=5, domain='LCG'):
     Remove CEs that have not been seen for a given time
     '''
     cs = _ConfigurationSystem()
-    base_path = cfgPath('/Resources/Sites', domain)
-    result = gConfig.getOptionsDict(base_path)
+    result = cs.getCurrentCFG()
     if not result['OK']:
         gLogger.error('Could not get current sites from the CS')
         return result
-    site_dict = result['Value']
+    base_path = cfgPath('/Resources/Sites', domain)
+    site_dict = result['Value'].getAsDict(base_path)
     for site, site_info in site_dict.iteritems():
         site_path = cfgPath(base_path, site)
         for ce, ce_info in site_info.get('CEs', {}).iteritems():
