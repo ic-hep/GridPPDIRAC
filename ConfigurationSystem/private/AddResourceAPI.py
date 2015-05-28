@@ -8,26 +8,13 @@ from datetime import datetime, date, timedelta
 from types import GeneratorType
 from urlparse import urlparse
 from DIRAC import gLogger, gConfig, S_OK, S_ERROR
-#from DIRAC.ConfigurationSystem.Client.Utilities import (getGridCEs,
-#                                                        getSiteUpdates,
-#                                                        getCEsFromCS,
-#                                                        getGridSRMs,
-#                                                        getSRMUpdates
-#                                                        )
-#from DIRAC.Core.Utilities.SitesDIRACGOCDBmapping import getDIRACSiteName
 from DIRAC.ConfigurationSystem.Client.CSAPI import CSAPI
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
-#from DIRAC.Core.Utilities.Pfn import pfnparse
-#from DIRAC.ConfigurationSystem.Client.Helpers.Registry import getVOs
-from DIRAC.Core.Utilities.Grid import (getBdiiCEInfo, getBdiiSEInfo, ldapSE,
+from DIRAC.Core.Utilities.Grid import (getBdiiCEInfo, ldapSE,
                                        ldapService, ldapsearchBDII)
 
 
 __all__ = ['checkUnusedCEs', 'checkUnusedSEs', 'removeOldCEs']
-
-
-#VER_RE = re.compile(r"(?P<major_revision>[0-9])\.[0-9]+")
-
 
 
 class _ConfigurationSystem(CSAPI):
@@ -39,8 +26,9 @@ class _ConfigurationSystem(CSAPI):
         self._num_changes = 0
         result = self.initialize()
         if not result['OK']:
-            gLogger.error('Failed to initialise CSAPI object', result['Message'])
-            raise RuntimeError(result['Message'])   
+            gLogger.error('Failed to initialise CSAPI object',
+                          result['Message'])
+            raise RuntimeError(result['Message'])
 
     def add(self, section, option, new_value):
         """
@@ -54,7 +42,8 @@ class _ConfigurationSystem(CSAPI):
             new_value: The value to be assigned
 
         Example:
-            >>> _ConfigurationSystem().add('/Registry', 'DefaultGroup', 'dteam_user')
+            >>> cs = _ConfigurationSystem()
+            >>> cs.add('/Registry', 'DefaultGroup', 'dteam_user')
         """
         if isinstance(new_value, (tuple, list, set, GeneratorType)):
             new_value = ', '.join(sorted(map(str, new_value)))
@@ -73,7 +62,7 @@ class _ConfigurationSystem(CSAPI):
             gLogger.notice("Modifying %s/%s:   %s -> %s"
                            % (section, option, old_value, new_value))
             self.modifyValue(cfgPath(section, option), new_value)
-        self._num_changes+=1
+        self._num_changes += 1
 
     def append_unique(self, section, option, new_value):
         """
@@ -105,7 +94,7 @@ class _ConfigurationSystem(CSAPI):
         else:
             old_values.append(new_value)
         self.add(section, option, old_values)
-            
+
     def remove(self, section, option=None):
         """
         Remove a section/option from the configuration system.
@@ -127,7 +116,7 @@ class _ConfigurationSystem(CSAPI):
         else:
             gLogger.notice("Removing option %s/%s" % (section, option))
             self.delOption(cfgPath(section, option))
-        self._num_changes+=1
+        self._num_changes += 1
 
     def commit(self):
         """
@@ -147,6 +136,7 @@ class _ConfigurationSystem(CSAPI):
             return S_OK()
         gLogger.notice("No changes to commit")
         return S_OK()
+
 
 def removeOldCEs(threshold=5, domain='LCG'):
     '''
@@ -171,6 +161,7 @@ def removeOldCEs(threshold=5, domain='LCG'):
                 cs.remove(section=ce_path)
     return cs.commit()
 
+
 def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
     '''
     Check for unused CEs and add them where possible
@@ -187,7 +178,7 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
         return result
     ceBdiiDict = result['Value']
 
-    ## now add the new resources
+    # now add the new resources
     cfgBase = "/Resources/Sites/%s" % domain
     changeSet = _ConfigurationSystem()
     for site, site_info in sorted(ceBdiiDict.iteritems()):
@@ -259,7 +250,7 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
 
             # The CEType needs to be "ARC" but the BDII contains "ARC-CE"
             if ce_type == 'ARC-CE':
-              ce_type = 'ARC'
+                ce_type = 'ARC'
 
             changeSet.add(ce_path, 'LastSeen', date.today().strftime('%d/%m/%Y'))
             changeSet.add(ce_path, 'architecture', arch)
@@ -267,7 +258,7 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
             changeSet.add(ce_path, 'HostRAM', ram)
             changeSet.add(ce_path, 'CEType', ce_type)
             changeSet.add(ce_path, 'OS', 'EL%s'
-                                         % os_release.split('.')[0].strip())
+                          % os_release.split('.')[0].strip())
             if 'ARC' in ce_type:
                 changeSet.add(ce_path, 'SubmissionMode', 'Direct')
                 changeSet.add(ce_path, 'JobListFile', '%s-jobs.xml' % ce)
@@ -302,7 +293,7 @@ class SiteNamingDict(dict):
         '''Return next valid DIRAC id from CN'''
         count = -1
         r = re.compile('%s(?P<se_index>[0-9]*?)-disk' % pattern)
-        ## faster implementation than max
+        # faster implementation than max
         for u in self.itervalues():
             match = r.match(u)
             if match:
@@ -371,8 +362,8 @@ def checkUnusedSEs(vo, host=None):
     if not result['OK']:
         return result
     srms = dict(((urlparse(i['GlueServiceEndpoint']).hostname, i)
-                for i in result['Value'] if 'GlueServiceEndpoint' in i
-                and urlparse(i['GlueServiceEndpoint']).hostname in ses))
+                 for i in result['Value'] if 'GlueServiceEndpoint' in i
+                 and urlparse(i['GlueServiceEndpoint']).hostname in ses))
 
     result = _ldap_vo_info(vo, host=host)
     if not result['OK']:
@@ -413,7 +404,7 @@ def checkUnusedSEs(vo, host=None):
                 gLogger.warn("No port determined for %s" % se)
                 continue
 
-            ## DIRACs Bdii2CSAgent used the ServiceAccessControlBaseRule value
+            # DIRACs Bdii2CSAgent used the ServiceAccessControlBaseRule value
             bdiiVOs = set([re.sub('^VO:', '', rule) for rule in
                            srmDict.get('GlueServiceAccessControlBaseRule', [])
                            ])
