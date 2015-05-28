@@ -37,8 +37,7 @@ class _ConfigurationSystem(CSAPI):
         """initialise"""
         CSAPI.__init__(self)
         self._num_changes = 0
-        self.initialize()
-        result = self.downloadCSData()
+        result = self.initialize()
         if not result['OK']:
             gLogger.error('Failed to initialise CSAPI object', result['Message'])
             raise RuntimeError(result['Message'])   
