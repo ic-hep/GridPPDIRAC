@@ -71,13 +71,15 @@ class _ConfigurationSystem(CSAPI):
         This method is like append except that it ensures that the final list
         of values for the given option only contains unique entries.
         """
-        old_values = set(v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v)
+#        old_values = set(v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v)
+        old_values = (v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(','))
+        new_values = set(v for v in old_values if v)
 
-        if isinstance(new_value, (tuple, list, set)):
-            old_values.update(map(str, new_value))
+        if isinstance(new_value, (tuple, list, set, GeneratorType)):
+            new_values.update(map(str, new_value))
         else:
-            old_values.add(str(new_value))
-        self.add(section, option, old_values)
+            new_values.add(str(new_value))
+        self.add(section, option, new_values)
 
     def append(self, section, option, new_value):
         """
@@ -87,21 +89,25 @@ class _ConfigurationSystem(CSAPI):
         is appended on to the end of the list of values associated
         with that option.
         """
-        old_values = [v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v]
+#        old_values = [v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v]
+        old_values = (v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(','))
+        new_values = [v for v in old_values if v]
 
-        if isinstance(new_value, (tuple, list, set)):
-            old_values.extend(new_value)
+        if isinstance(new_value, (tuple, list, set, GeneratorType)):
+            new_values.extend(new_value)
         else:
-            old_values.append(new_value)
-        self.add(section, option, old_values)
+            new_values.append(new_value)
+        self.add(section, option, new_values)
 
-    def remove(self, section, option=None):
+    def remove(self, section, option=None, value=None):
         """
         Remove a section/option from the configuration system.
 
         This method will remove the specified section if the option argument
-        is None (default). If the option argument is given then that option
-        (formed of section/option) is removed.
+        is None (default). If the option argument is given but value is None
+        then that option (formed of section/option) is removed. If both option
+        and value are given then that value is removed from the comma seperated
+        values associated with that option.
 
         Args:
             section (str): The section
@@ -113,9 +119,15 @@ class _ConfigurationSystem(CSAPI):
         if option is None:
             gLogger.notice("Removing section %s" % section)
             self.delSection(section)
-        else:
+        elif value is None:
             gLogger.notice("Removing option %s/%s" % (section, option))
             self.delOption(cfgPath(section, option))
+        else:
+            gLogger.notice("Removing value '%s' from option %s/%s"
+                           % (value, section, option))
+            old_values = (v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(','))
+            new_values = [v for v in old_values if v and v != str(value)]
+            self.add(section, option, new_values)
         self._num_changes += 1
 
     def commit(self):
@@ -159,6 +171,7 @@ def removeOldCEs(threshold=5, domain='LCG'):
             last_seen = datetime.strptime(ce_info['LastSeen'], '%d/%m/%Y').date()
             if date.today() - last_seen > timedelta(days=threshold):
                 cs.remove(section=ce_path)
+                cs.remove(section=site_path, option='CE', value=ce)
     return cs.commit()
 
 
