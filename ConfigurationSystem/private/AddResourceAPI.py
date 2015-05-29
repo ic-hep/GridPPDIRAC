@@ -71,13 +71,15 @@ class _ConfigurationSystem(CSAPI):
         This method is like append except that it ensures that the final list
         of values for the given option only contains unique entries.
         """
-        old_values = set(v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v)
+#        old_values = set(v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v)
+        old_values = (v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(','))
+        new_values = set(v for v in old_values if v)
 
-        if isinstance(new_value, (tuple, list, set)):
-            old_values.update(map(str, new_value))
+        if isinstance(new_value, (tuple, list, set, GeneratorType)):
+            new_values.update(map(str, new_value))
         else:
-            old_values.add(str(new_value))
-        self.add(section, option, old_values)
+            new_values.add(str(new_value))
+        self.add(section, option, new_values)
 
     def append(self, section, option, new_value):
         """
@@ -87,13 +89,15 @@ class _ConfigurationSystem(CSAPI):
         is appended on to the end of the list of values associated
         with that option.
         """
-        old_values = [v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v]
+#        old_values = [v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v]
+        old_values = (v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(','))
+        new_values = [v for v in old_values if v]
 
-        if isinstance(new_value, (tuple, list, set)):
-            old_values.extend(new_value)
+        if isinstance(new_value, (tuple, list, set, GeneratorType)):
+            new_values.extend(new_value)
         else:
-            old_values.append(new_value)
-        self.add(section, option, old_values)
+            new_values.append(new_value)
+        self.add(section, option, new_values)
 
     def remove(self, section, option=None, value=None):
         """
@@ -121,8 +125,9 @@ class _ConfigurationSystem(CSAPI):
         else:
             gLogger.notice("Removing value '%s' from option %s/%s"
                            % (value, section, option))
-            old_values = [v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v and v != str(value)]
-            self.add(section, option, old_values)
+            old_values = (v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(','))
+            new_values = [v for v in old_values if v and v != str(value)]
+            self.add(section, option, new_values)
         self._num_changes += 1
 
     def commit(self):
