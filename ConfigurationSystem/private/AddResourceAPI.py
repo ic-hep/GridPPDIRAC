@@ -95,13 +95,15 @@ class _ConfigurationSystem(CSAPI):
             old_values.append(new_value)
         self.add(section, option, old_values)
 
-    def remove(self, section, option=None):
+    def remove(self, section, option=None, value=None):
         """
         Remove a section/option from the configuration system.
 
         This method will remove the specified section if the option argument
-        is None (default). If the option argument is given then that option
-        (formed of section/option) is removed.
+        is None (default). If the option argument is given but value is None
+        then that option (formed of section/option) is removed. If both option
+        and value are given then that value is removed from the comma seperated
+        values associated with that option.
 
         Args:
             section (str): The section
@@ -113,9 +115,14 @@ class _ConfigurationSystem(CSAPI):
         if option is None:
             gLogger.notice("Removing section %s" % section)
             self.delSection(section)
-        else:
+        elif value is None:
             gLogger.notice("Removing option %s/%s" % (section, option))
             self.delOption(cfgPath(section, option))
+        else:
+            gLogger.notice("Removing value '%s' from option %s/%s"
+                           % (value, section, option))
+            old_values = [v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v and v != str(value)]
+            self.add(section, option, old_values)
         self._num_changes += 1
 
     def commit(self):
@@ -159,6 +166,7 @@ def removeOldCEs(threshold=5, domain='LCG'):
             last_seen = datetime.strptime(ce_info['LastSeen'], '%d/%m/%Y').date()
             if date.today() - last_seen > timedelta(days=threshold):
                 cs.remove(section=ce_path)
+                cs.remove(section=site_path, option='CE', value=ce)
     return cs.commit()
 
 
