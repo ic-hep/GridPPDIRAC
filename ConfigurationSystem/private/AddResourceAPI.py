@@ -251,9 +251,9 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
                         q_si00 = i.split('=')[-1].strip()
                         break
 
-                total_cpus = int(queue_info.get('GlueCEInfoTotalCPUs', 0))
-                max_total_jobs = min(1000, int(total_cpus/2))
-                max_waiting_jobs = max(2, int(max_total_jobs * 0.1))
+                max_total_jobs = int(queue_info.get('GlueCEInfoTotalCPUs', 0)) or \
+                                 int(ce_info.get('GlueSubClusterLogicalCPUs', 0))
+                max_waiting_jobs = 2 * max_total_jobs
 
                 changeSet.append_unique(queue_path, 'VO', vos)
                 changeSet.add(queue_path, 'SI00', q_si00)
