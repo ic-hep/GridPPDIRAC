@@ -7,6 +7,7 @@
 """  The Site Director is a simple agent performing pilot job submission to particular sites.
 """
 
+import os
 from DIRAC.WorkloadManagementSystem.Agent.SiteDirector     import SiteDirector as OriginalSiteDirector
 
 DIRAC_MODULES = [ os.path.join( DIRAC.rootPath, 'DIRAC', 'WorkloadManagementSystem', 'PilotAgent', 'pilotCommands.py' ),
