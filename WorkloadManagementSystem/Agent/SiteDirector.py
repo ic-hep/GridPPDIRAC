@@ -8,6 +8,7 @@
 """
 
 import os
+import DIRAC
 from DIRAC.WorkloadManagementSystem.Agent.SiteDirector     import SiteDirector as OriginalSiteDirector
 
 DIRAC_MODULES = [ os.path.join( DIRAC.rootPath, 'DIRAC', 'WorkloadManagementSystem', 'PilotAgent', 'pilotCommands.py' ),
