@@ -240,6 +240,8 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
                 ce_type = queue_info.get('GlueCEImplementationName', '')
                 max_cpu_time = queue_info.get('GlueCEPolicyMaxCPUTime')
                 acbr = queue_info.get('GlueCEAccessControlBaseRule')
+                if not isinstance(acbr, (list, tuple, set)):
+                    acbr = [acbr]
                 vos = set((rule.replace('VO:', '') for rule in acbr
                            if rule.startswith('VO:')))
                 q_si00 = ''
