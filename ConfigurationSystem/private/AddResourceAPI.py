@@ -150,10 +150,13 @@ class _ConfigurationSystem(CSAPI):
         return S_OK()
 
 
-def removeOldCEs(threshold=5, domain='LCG'):
+def removeOldCEs(threshold=5, domain='LCG', banned_ces=None):
     '''
     Remove CEs that have not been seen for a given time
     '''
+    if banned_ces is None:
+        banned_ces = []
+
     cs = _ConfigurationSystem()
     result = cs.getCurrentCFG()
     if not result['OK']:
@@ -169,13 +172,15 @@ def removeOldCEs(threshold=5, domain='LCG'):
                 gLogger.debug("No LastSeen info for CE: %s at site: %s" % (ce, site))
                 continue
             last_seen = datetime.strptime(ce_info['LastSeen'], '%d/%m/%Y').date()
-            if date.today() - last_seen > timedelta(days=threshold):
+            if date.today() - last_seen > timedelta(days=threshold) \
+                    or ce in banned_ces:
                 cs.remove(section=ce_path)
                 cs.remove(section=site_path, option='CE', value=ce)
     return cs.commit()
 
 
-def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
+def checkUnusedCEs(vo, host=None, domain='LCG',
+                   country_default='xx', banned_ces=None):
     '''
     Check for unused CEs and add them where possible
 
@@ -185,6 +190,9 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
     country_default   - the default country code to use to substitute into
                         the dirac site name
     '''
+    if banned_ces is None:
+        banned_ces = []
+
     result = getBdiiCEInfo(vo, host=host)
     if not result['OK']:
         gLogger.error("Problem getting BDII info")
@@ -233,6 +241,8 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
         se_list = set(se for se in current_ses if se.startswith(site))
         ce_list = set()
         for ce, ce_info in sorted(site_info.get('CEs', {}).iteritems()):
+            if ce in banned_ces:
+                continue
             ce_path = cfgPath(sitePath, 'CEs', ce)
             ce_list.add(ce)
 
@@ -371,13 +381,16 @@ def _ldap_vo_info(vo_name, host=None):
     return S_OK(ret)
 
 
-def checkUnusedSEs(vo, host=None):
+def checkUnusedSEs(vo, host=None, banned_ses=None):
     '''
     Check for unused SEs
 
     vo                - The VO
     host              - BDII host default, default = 'lcg-bdii.cern.ch:2170'
     '''
+    if banned_ses is None:
+        banned_ses = []
+
     result = ldapSE('*', vo=vo, host=host)
     if not result['OK']:
         return result
@@ -400,6 +413,8 @@ def checkUnusedSEs(vo, host=None):
     cfgBase = '/Resources/StorageElements'
     mapping = SiteNamingDict(cfgBase)
     for se, se_info in sorted(ses.iteritems()):
+        if se in banned_ses:
+            continue
         bdii_site_id = se_info.get('GlueSiteUniqueID')
         site = mapping.setdefault(se, mapping.nextValidName(bdii_site_id))
 

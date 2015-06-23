@@ -46,6 +46,8 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
         self.bdii_host = self.am_getOption('BDIIHost', None)
         self.removeOldCEs = self.am_getOption('RemoveOldCEs', True)
         self.ce_removal_threshold = self.am_getOption('CERemovalThreshold', 5)
+        self.banned_ces = self.am_getOption('BannedCEs', [])
+        self.banned_ses = self.am_getOption('BannedSEs', [])
         return Bdii2CSAgent.initialize(self)
 
     def execute(self):
@@ -55,7 +57,8 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
         for vo in self.voName:
             if self.processSEs:
                 ## Checking for unused SEs
-                result = checkUnusedSEs(vo, host=self.bdii_host)
+                result = checkUnusedSEs(vo, host=self.bdii_host,
+                                        banned_ses=self.banned_ses)
                 if not result['OK']:
                     self.log.error("Error while running check for unused SEs "
                                    "in the VO %s: %s"
@@ -67,7 +70,8 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
                 result = checkUnusedCEs(vo,
                                         host=self.bdii_host,
                                         domain=self.domain,
-                                        country_default=self.country_default)
+                                        country_default=self.country_default,
+                                        banned_ces=self.banned_ces)
                 if not result['OK']:
                     self.log.error("Error while running check for unused CEs "
                                    "in the VO %s: %s"
@@ -75,7 +79,8 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
                     continue
 
         if self.removeOldCEs:
-            result = removeOldCEs(self.ce_removal_threshold, self.domain)
+            result = removeOldCEs(self.ce_removal_threshold, self.domain,
+                                  self.banned_ces)
             if not result['OK']:
                 self.log.error("Error while running removal of old CEs: "
                                "%s" % result['Message'])
