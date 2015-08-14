@@ -252,10 +252,11 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
                     if 'CPUScalingReferenceSI00' in i:
                         q_si00 = i.split('=')[-1].strip()
                         break
-
-                max_total_jobs = int(queue_info.get('GlueCEInfoTotalCPUs', 0)) or \
+                # MaxTotalJobs in dirac is (running jobs (i.e. hardware) + waiting jobs)    
+                max_total_jobs_slots = int(queue_info.get('GlueCEInfoTotalCPUs', 0)) or \
                                  int(ce_info.get('GlueSubClusterLogicalCPUs', 0))
-                max_waiting_jobs = 2 * max_total_jobs
+                max_waiting_jobs = 2 * max_total_jobs_slots
+                max_total_jobs = max_waiting_jobs + 2 * max_total_jobs_slots
 
                 changeSet.append_unique(queue_path, 'VO', vos)
                 changeSet.add(queue_path, 'SI00', q_si00)
