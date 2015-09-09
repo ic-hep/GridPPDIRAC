@@ -53,6 +53,15 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
         General agent execution method
         """
         for vo in self.voName:
+            if self.processSEs:
+                ## Checking for unused SEs
+                result = checkUnusedSEs(vo, host=self.bdii_host)
+                if not result['OK']:
+                    self.log.error("Error while running check for unused SEs "
+                                   "in the VO %s: %s"
+                                   % (vo, result['Message']))
+                    continue
+
             if self.processCEs:
                 ## Checking for unused CEs
                 result = checkUnusedCEs(vo,
@@ -65,14 +74,6 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
                                    % (vo, result['Message']))
                     continue
 
-            if self.processSEs:
-                ## Checking for unused SEs
-                result = checkUnusedSEs(vo, host=self.bdii_host)
-                if not result['OK']:
-                    self.log.error("Error while running check for unused SEs "
-                                   "in the VO %s: %s"
-                                   % (vo, result['Message']))
-                    continue
         if self.removeOldCEs:
             result = removeOldCEs(self.ce_removal_threshold, self.domain)
             if not result['OK']:

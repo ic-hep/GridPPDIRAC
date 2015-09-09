@@ -191,6 +191,14 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
         return result
     ceBdiiDict = result['Value']
 
+    # get current list of SEs
+    result = gConfig.getSections('/Resources/StorageElements')
+    current_ses = set()
+    if result['OK']:
+        current_ses.update(result['Value'])
+    else:
+        gLogger.warn("Couldn't get current CS list of SEs")
+
     # now add the new resources
     cfgBase = "/Resources/Sites/%s" % domain
     changeSet = _ConfigurationSystem()
@@ -222,6 +230,7 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
                         .replace('mailto:', '')\
                         .strip()
 
+        se_list = set(se for se in current_ses if se.startswith(site))
         ce_list = set()
         for ce, ce_info in sorted(site_info.get('CEs', {}).iteritems()):
             ce_path = cfgPath(sitePath, 'CEs', ce)
@@ -286,6 +295,7 @@ def checkUnusedCEs(vo, host=None, domain='LCG', country_default='xx'):
         changeSet.add(sitePath, 'Coordinates', '%s:%s' % (longitude, latitude))
         changeSet.add(sitePath, 'Mail', mail)
         changeSet.append_unique(sitePath, 'CE', ce_list)
+        changeSet.append_unique(sitePath, 'SE', se_list)
     return changeSet.commit()
 
 
