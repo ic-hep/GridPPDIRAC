@@ -119,9 +119,11 @@ class _ConfigurationSystem(CSAPI):
         if option is None:
             gLogger.notice("Removing section %s" % section)
             self.delSection(section)
+            self._num_changes += 1
         elif value is None:
             gLogger.notice("Removing option %s/%s" % (section, option))
             self.delOption(cfgPath(section, option))
+            self._num_changes += 1
         else:
             if isinstance(value, str):
                 value = [value]
@@ -130,7 +132,6 @@ class _ConfigurationSystem(CSAPI):
             old_values = (v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(','))
             new_values = [v for v in old_values if v and v not in value]
             self.add(section, option, new_values)
-        self._num_changes += 1
 
     def commit(self):
         """
