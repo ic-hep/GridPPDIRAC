@@ -123,10 +123,12 @@ class _ConfigurationSystem(CSAPI):
             gLogger.notice("Removing option %s/%s" % (section, option))
             self.delOption(cfgPath(section, option))
         else:
-            gLogger.notice("Removing value '%s' from option %s/%s"
-                           % (value, section, option))
+            if isinstance(value, str):
+                value = [value]
+            gLogger.notice("Removing value(s) %s from option %s/%s"
+                           % (list(value), section, option))
             old_values = (v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(','))
-            new_values = [v for v in old_values if v and v != str(value)]
+            new_values = [v for v in old_values if v and v not in value]
             self.add(section, option, new_values)
         self._num_changes += 1
 
@@ -164,6 +166,7 @@ def removeOldCEs(threshold=5, domain='LCG', banned_ces=None):
         return result
     base_path = cfgPath('/Resources/Sites', domain)
     site_dict = result['Value'].getAsDict(base_path)
+    removed_ces = set()
     for site, site_info in site_dict.iteritems():
         site_path = cfgPath(base_path, site)
         for ce, ce_info in site_info.get('CEs', {}).iteritems():
@@ -175,7 +178,9 @@ def removeOldCEs(threshold=5, domain='LCG', banned_ces=None):
             if date.today() - last_seen > timedelta(days=threshold) \
                     or ce in banned_ces:
                 cs.remove(section=ce_path)
-                cs.remove(section=site_path, option='CE', value=ce)
+                removed_ces.add(ce)
+        if removed_ces:
+            cs.remove(section=site_path, option='CE', value=removed_ces)
     return cs.commit()
 
 
