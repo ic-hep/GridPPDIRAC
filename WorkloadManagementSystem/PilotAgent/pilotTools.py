@@ -31,7 +31,7 @@ def printVersion( log ):
 def pythonPathCheck():
 
   try:
-    os.umask( 022 )
+    os.umask( 18 ) # 022
     pythonpath = os.getenv( 'PYTHONPATH', '' ).split( ':' )
     print 'Directories in PYTHONPATH:', pythonpath
     for p in pythonpath:
@@ -72,15 +72,25 @@ def retrieveUrlTimeout( url, fileName, log, timeout = 0 ):
       expectedBytes = long( remoteFD.info()[ 'Content-Length' ] )
     except Exception, x:
       expectedBytes = 0
-    localFD = open( fileName, "wb" )
     data = remoteFD.read()
-    localFD.write( data )        
-    localFD.close()
+    if fileName:
+      localFD = open( fileName + '-local', "wb" )
+      localFD.write( data )
+      localFD.close()
+    else:
+      urlData += data
     remoteFD.close()
     if len( data ) != expectedBytes and expectedBytes > 0:
       log.error( 'URL retrieve: expected size does not match the received one' )
       return False
-    return True
+
+    if timeout:
+      signal.alarm( 0 )
+    if fileName:
+      return True
+    else:
+      return urlData
+
   except urllib2.HTTPError, x:
     if x.code == 404:
       log.error( "URL retrieve: %s does not exist" % url )
@@ -97,6 +107,7 @@ def retrieveUrlTimeout( url, fileName, log, timeout = 0 ):
       signal.alarm( 0 )
     raise x  
   
+
 class ObjectLoader( object ):
   """ Simplified class for loading objects from a DIRAC installation.
 
@@ -307,12 +318,22 @@ class CommandBase( object ):
 
       # return code
       returnCode = _p.wait()
+      self.log.debug( "Return code of %s: %d" % ( cmd, returnCode ) )
 
       return (returnCode, outData)
     except ImportError:
       self.log.error( "Error importing subprocess" )
 
-class PilotParams:
+  def exitWithError( self, errorCode ):
+    """ Wrapper around sys.exit()
+    """
+    self.log.info( "List of child processes of current PID:" )
+    retCode, _outData = self.executeAndGetOutput( "ps --forest -o pid,%%cpu,%%mem,tty,stat,time,cmd -g %d" % os.getpid() )
+    if retCode:
+      self.log.error( "Failed to issue ps [ERROR %d] " % retCode )
+    sys.exit( errorCode )
+
+class PilotParams( object ):
   """ Class that holds the structure with all the parameters to be used across all the commands
   """
 
@@ -323,6 +344,11 @@ class PilotParams:
 
         param names and defaults are defined here
     """
+
+    self.rootPath = os.getcwd()
+    self.originalRootPath = os.getcwd()
+    self.pilotRootPath = os.getcwd()
+    self.workingDir = os.getcwd()
 
     self.optList = {}
     self.debugFlag = False
@@ -337,6 +363,7 @@ class PilotParams:
     self.configServer = ""
     self.installation = ""
     self.ceName = ""
+    self.ceType = ''
     self.queueName = ""
     self.platform = ""
     self.minDiskSpace = 2560 #MB
@@ -352,24 +379,20 @@ class PilotParams:
     self.releaseProject = ''
     self.gateway = ""
     self.useServerCertificate = False
-    self.rootPath = ''
-    self.pilotRootPath = ''
     self.pilotScriptName = ''
-    self.workingDir = ''
     # DIRAC client installation environment
     self.diracInstalled = False
     self.diracExtensions = []
     # Some commands can define environment necessary to execute subsequent commands
-    self.installEnv = None
+    self.installEnv = os.environ
     # If DIRAC is preinstalled this file will receive the updates of the local configuration
     self.localConfigFile = ''
     self.executeCmd = False
     self.configureScript = 'dirac-configure'
     self.architectureScript = 'dirac-platform'
-
-    #set the tarball url
-    self.tarballUrl = ''
-
+    self.certsLocation = '%s/etc/grid-security' % self.workingDir
+    self.pilotCFGFile = 'pilot.json'
+    self.pilotCFGFileLocation = 'http://lhcbproject.web.cern.ch/lhcbproject/dist/DIRAC3/defaults/'
     ##settings for git checkout
     ## A list of (url, branch) tuples
     self.gitRepos = []
@@ -390,8 +413,9 @@ class PilotParams:
                      ( 'n:', 'name=', 'Set <Site> as Site Name' ),
                      ( 'D:', 'disk=', 'Require at least <space> MB available' ),
                      ( 'M:', 'MaxCycles=', 'Maximum Number of JobAgent cycles to run' ),
-                     ( 'N:', 'Name=', 'Use <CEName> to determine Site Name' ),
-                     ( 'Q:', 'Queue', 'Queue name' ),
+                     ( 'N:', 'Name=', 'CE Name' ),
+                     ( 'Q:', 'Queue=', 'Queue name' ),
+                     ( 'y:', 'CEType=', 'CE Type (normally InProcess)' ),
                      ( 'S:', 'setup=', 'DIRAC Setup to use' ),
                      ( 'C:', 'configurationServer=', 'Configuration servers to use' ),
                      ( 'T:', 'CPUTime', 'Requested CPU Time' ),
@@ -403,6 +427,9 @@ class PilotParams:
                      ( 's:', 'section=', 'Set base section for relative parsed options' ),
                      ( 'o:', 'option=', 'Option=value to add' ),
                      ( 'c', 'cert', 'Use server certificate instead of proxy' ),
+                     ( 'C:', 'certLocation=', 'Specify server certificate location' ),
+                     ( 'L:', 'pilotCFGLocation=', 'Specify pilot CFG location' ),
+                     ( 'F:', 'pilotCFGFile=', 'Specify pilot CFG file' ),
                      ( 'R:', 'reference=', 'Use this pilot reference' ),
                      ( 'x:', 'execute=', 'Execute instead of JobAgent' ),
                      ( 't:', 'git=', 'git url[@branch] to clone (may be specified multiple times)' ),
@@ -428,6 +455,8 @@ class PilotParams:
         self.site = v
       elif o == '-N' or o == '--Name':
         self.ceName = v
+      elif o == '-y' or o == '--CEType':
+        self.ceType = v
       elif o == '-Q' or o == '--Queue':
         self.queueName = v  
       elif o == '-R' or o == '--reference':
@@ -462,13 +491,19 @@ class PilotParams:
         self.gateway = v
       elif o == '-c' or o == '--cert':
         self.useServerCertificate = True
+      elif o == '-C' or o == '--certLocation':
+        self.certsLocation = v
+      elif o == '-L' or o == '--pilotCFGLocation':
+        self.pilotCFGFileLocation = v
+      elif o == '-F' or o == '--pilotCFGFile':
+        self.pilotCFGFile = v
       elif o == '-M' or o == '--MaxCycles':
         try:
           self.maxCycles = min( self.MAX_CYCLES, int( v ) )
         except:
           pass
-      elif o in ('-u', '--url'):
-        self.tarballUrl = v
+      elif o in ( '-T', '--CPUTime' ):
+        self.jobCPUReq = v
       elif o in ( '-t', '--git' ):
         if "@" in v:
           url, branch = v.split("@")
@@ -476,9 +511,3 @@ class PilotParams:
           url = v
           branch = None
         self.gitRepos.append( (url, branch, ) )
-
-    self.rootPath = os.getcwd()
-    self.originalRootPath = os.getcwd()
-    self.pilotRootPath = os.getcwd()
-    self.workingDir = os.getcwd()
-
