@@ -4,6 +4,7 @@ API for adding resources to CS
 """
 import os
 import re
+from functools import partial
 from datetime import datetime, date, timedelta
 from types import GeneratorType
 from urlparse import urlparse
@@ -16,6 +17,10 @@ from DIRAC.Core.Utilities.Grid import (getBdiiCEInfo, ldapSE,
 
 __all__ = ['checkUnusedCEs', 'checkUnusedSEs', 'removeOldCEs']
 
+special_country_mappings = [partial(re.compile(r'.gov$').sub, repl='.us'),
+                            partial(re.compile(r'.edu$').sub, repl='.us'),
+                            partial(re.compile(r'EFDA-JET.edu$').sub, repl='EFDA-JET.uk')
+                            ]
 
 class _ConfigurationSystem(CSAPI):
     """ Class to smartly wrap the functionality of the CS"""
@@ -218,15 +223,11 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
     changeSet = _ConfigurationSystem()
     for site, site_info in sorted(ceBdiiDict.iteritems()):
         diracSite = '.'.join((domain, site))
-        countryCodes = (ce.split('.')[-1].strip()
-                        for ce in site_info.get('CEs', {}).iterkeys())
-        for countryCode in countryCodes:
-            if countryCode == 'gov':
-                diracSite = '.'.join((diracSite, 'us'))
-                break
-            if countryCode == 'edu':
-                diracSite = '.'.join((diracSite, 'us'))
-                break
+
+        for ce in site_info.get('CEs', {}).iterkeys():
+            for m in special_country_mappings:
+                ce = m(string=ce.strip())
+            countryCode = ce.split('.')[-1].strip()
             if len(countryCode) == 2:
                 diracSite = '.'.join((diracSite, countryCode))
                 break
