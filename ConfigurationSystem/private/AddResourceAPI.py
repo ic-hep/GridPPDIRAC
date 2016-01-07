@@ -224,6 +224,9 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
             if countryCode == 'gov':
                 diracSite = '.'.join((diracSite, 'us'))
                 break
+            if countryCode == 'edu':
+                diracSite = '.'.join((diracSite, 'us'))
+                break
             if len(countryCode) == 2:
                 diracSite = '.'.join((diracSite, countryCode))
                 break
