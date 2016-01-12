@@ -17,10 +17,11 @@ from DIRAC.Core.Utilities.Grid import (getBdiiCEInfo, ldapSE,
 
 __all__ = ['checkUnusedCEs', 'checkUnusedSEs', 'removeOldCEs']
 
-special_country_mappings = [partial(re.compile(r'\.gov$').sub, repl='.us'),
-                            partial(re.compile(r'\.edu$').sub, repl='.us'),
-                            partial(re.compile(r'EFDA-JET\.org$').sub, repl='EFDA-JET.uk')
-                            ]
+special_cc_flags = re.IGNORECASE
+special_cc_mappings = [partial(re.compile(r'\.gov$', special_cc_flags).sub, repl='.us'),
+                       partial(re.compile(r'\.edu$', special_cc_flags).sub, repl='.us'),
+                       partial(re.compile(r'EFDA-JET\.org$', special_cc_flags).sub, repl='EFDA-JET.uk')
+                       ]
 
 class _ConfigurationSystem(CSAPI):
     """ Class to smartly wrap the functionality of the CS"""
@@ -225,7 +226,7 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
         diracSite = '.'.join((domain, site))
 
         for ce in site_info.get('CEs', {}).iterkeys():
-            for m in special_country_mappings:
+            for m in special_cc_mappings:
                 ce = m(string=ce.strip())
             countryCode = ce.split('.')[-1].strip()
             if len(countryCode) == 2:
