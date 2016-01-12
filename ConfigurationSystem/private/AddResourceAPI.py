@@ -17,9 +17,9 @@ from DIRAC.Core.Utilities.Grid import (getBdiiCEInfo, ldapSE,
 
 __all__ = ['checkUnusedCEs', 'checkUnusedSEs', 'removeOldCEs']
 
-special_country_mappings = [partial(re.compile(r'.gov$').sub, repl='.us'),
-                            partial(re.compile(r'.edu$').sub, repl='.us'),
-                            partial(re.compile(r'EFDA-JET.edu$').sub, repl='EFDA-JET.uk')
+special_country_mappings = [partial(re.compile(r'\.gov$').sub, repl='.us'),
+                            partial(re.compile(r'\.edu$').sub, repl='.us'),
+                            partial(re.compile(r'EFDA-JET\.org$').sub, repl='EFDA-JET.uk')
                             ]
 
 class _ConfigurationSystem(CSAPI):
