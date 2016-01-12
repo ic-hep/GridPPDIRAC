@@ -20,7 +20,8 @@ __all__ = ['checkUnusedCEs', 'checkUnusedSEs', 'removeOldCEs']
 special_cc_flags = re.IGNORECASE
 special_cc_mappings = [partial(re.compile(r'\.gov$', special_cc_flags).sub, repl='.us'),
                        partial(re.compile(r'\.edu$', special_cc_flags).sub, repl='.us'),
-                       partial(re.compile(r'EFDA-JET\.org$', special_cc_flags).sub, repl='EFDA-JET.uk')
+                       partial(re.compile(r'efda\.org$', special_cc_flags).sub, repl='efda.uk'),
+                       partial(re.compile(r'atlas-swt2\.org$', special_cc_flags).sub, repl='atlas-swt2.us')
                        ]
 
 class _ConfigurationSystem(CSAPI):
