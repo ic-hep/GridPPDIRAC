@@ -198,7 +198,7 @@ class UsersAndGroupsAPI(object):
         ## add groups before users as fails if user belongs
         ## to unknown group. use modify so if group already
         ## exists, start by blanking it's users.
-        managed_groups = set(vomsMapping.itervalues())
+        managed_groups = set(vomsMapping.itervalues()) - dead_VO_groups
         for group in managed_groups:
             #csapi.addGroup(group, {'Users': ''})
             csapi.modifyGroup(group, {'Users': ''}, createIfNonExistant=True)
