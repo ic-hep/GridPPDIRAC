@@ -90,6 +90,7 @@ class UsersAndGroupsAPI(object):
         ## Main VO loop
         ################################################################
         usersInVOMS = DiracUsers()
+        dead_VO_groups = set()
         #groupsInVOMS = set()
         for vo in self._vomsSrv.vos:
             ## Get the VO name from VOMS
@@ -97,6 +98,7 @@ class UsersAndGroupsAPI(object):
             if not result['OK']:
                 gLogger.warn('Could not retrieve VOMS VO name for vo %s, '
                              'skipping...' % vo)
+                dead_VO_groups.update(v for k, v in vomsMapping.iteritems() if k.startswith('/%s' % vo))
                 continue
             voNameInVOMS = result['Value']
 
@@ -196,7 +198,7 @@ class UsersAndGroupsAPI(object):
         ## add groups before users as fails if user belongs
         ## to unknown group. use modify so if group already
         ## exists, start by blanking it's users.
-        managed_groups = set(vomsMapping.itervalues())
+        managed_groups = set(vomsMapping.itervalues()) - dead_VO_groups
         for group in managed_groups:
             #csapi.addGroup(group, {'Users': ''})
             csapi.modifyGroup(group, {'Users': ''}, createIfNonExistant=True)
@@ -215,7 +217,7 @@ class UsersAndGroupsAPI(object):
                                              .get('Groups', []))
             new_groups = current_groups - managed_groups
             new_groups.update(user.get('Groups', set()))
-            if not new_groups:
+            if not new_groups and not (current_groups & dead_VO_groups):
                 obsoleteUsers.add(user_nick)
 
             user['Groups'] = sorted(new_groups)
