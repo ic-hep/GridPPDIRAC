@@ -464,17 +464,14 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
 
             old_path = gConfig.getValue(cfgPath(accessSection, 'Path'), None)
             path = vo_info.get(se, {}).get('Path')
-            vo_path = vo_info.get(se, {}).get('VOPath')
+            vo_path = vo_info.get(se, {}).get('VOPath') or os.path.join(path, vo)
 
             # If path is different from last VO then we just default the
             # path to / and use the VOPath dict
             if old_path and path and path != old_path:
-                vo_path = vo_path or os.path.join(path, vo)
                 path = '/'
 
-            if vo_path:
-                changeSet.add(vopathSection, vo, vo_path)
-
+            changeSet.add(vopathSection, vo, vo_path)
             changeSet.add(accessSection, 'Protocol', 'srm')
             changeSet.add(accessSection, 'ProtocolName', 'SRM2')
             changeSet.add(accessSection, 'Port', port)
