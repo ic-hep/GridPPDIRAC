@@ -407,7 +407,7 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
     if not result['OK']:
         return result
     ses = dict(((i['GlueSEUniqueID'], i) for i in result['Value']
-                if 'GlueSEUniqueID' in i))
+                if '.' in i.get('GlueSEUniqueID', '')))
 
     result = ldapService(serviceType='SRM', vo=vo, host=host)
     if not result['OK']:
