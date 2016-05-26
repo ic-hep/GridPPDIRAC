@@ -259,6 +259,7 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
             ce_list.add(ce)
 
             arch = ce_info.get('GlueHostArchitecturePlatformType', '')
+            num_cores = int(ce_info.get('GlueHostArchitectureSMPSize', 1))
             si00 = ce_info.get('GlueHostBenchmarkSI00', '')
             ram = ce_info.get('GlueHostMainMemoryRAMSize', '')
             os_name = ce_info.get('GlueHostOperatingSystemName', '')
@@ -299,6 +300,8 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
             if ce_type == 'ARC-CE':
                 ce_type = 'ARC'
 
+            if num_cores > 1:
+                changeSet.add(ce_path, 'MaxProcessors', num_cores)
             changeSet.add(ce_path, 'LastSeen', date.today().strftime('%d/%m/%Y'))
             changeSet.add(ce_path, 'architecture', arch)
             changeSet.add(ce_path, 'SI00', si00)
