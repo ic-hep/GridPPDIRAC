@@ -367,6 +367,9 @@ def _ldap_vo_info(vo_name, host=None):
     vo_filter = '(GlueVOInfoAccessControlBaseRule=VOMS:/%s/*)' % vo_name
     vo_filter += '(GlueVOInfoAccessControlBaseRule=VOMS:/%s)' % vo_name
     vo_filter += '(GlueVOInfoAccessControlBaseRule=VO:%s)' % vo_name
+    vo_filter += '(GlueVOInfoAccessControlRule=VOMS:/%s/*)' % vo_name
+    vo_filter += '(GlueVOInfoAccessControlRule=VOMS:/%s)' % vo_name
+    vo_filter += '(GlueVOInfoAccessControlRule=VO:%s)' % vo_name
     filt = '(&(objectClass=GlueVOInfo)(|%s))' % vo_filter
     result = ldapsearchBDII(filt=filt, host=host)
     if not result['OK']:
