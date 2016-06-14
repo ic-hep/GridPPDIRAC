@@ -326,6 +326,9 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
 
 class SiteNamingDict(dict):
     '''Dict for site names'''
+
+    _latency_mapping = {'online': 'disk',
+                        'nearline': 'tape'}
     def __init__(self, cfgBase):
         super(SiteNamingDict, self).__init__()
         result = gConfig.getSections(cfgBase)
@@ -340,10 +343,12 @@ class SiteNamingDict(dict):
                     continue
             self[r['Value']['Host']] = s
 
-    def nextValidName(self, pattern):
+    def nextValidName(self, pattern, latency):
         '''Return next valid DIRAC id from CN'''
         count = -1
-        r = re.compile('%s(?P<se_index>[0-9]*?)-disk' % pattern)
+        extension = SiteNamingDict._latency_mapping.get(latency.lower(), 'disk')
+        r = re.compile('%s(?P<se_index>[0-9]*?)-%s'
+                       % (pattern, extension))
         # faster implementation than max
         for u in self.itervalues():
             match = r.match(u)
@@ -353,8 +358,8 @@ class SiteNamingDict(dict):
                 if m > count:
                     count = m
         if count == -1:
-            return pattern + '-disk'
-        return pattern + str(count + 1) + '-disk'
+            return pattern + '-%s' % extension
+        return pattern + str(count + 1) + '-%s' % extension
 
 
 def _ldap_vo_info(vo_name, host=None):
@@ -431,7 +436,9 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
         if se in banned_ses:
             continue
         bdii_site_id = se_info.get('GlueSiteUniqueID')
-        site = mapping.setdefault(se, mapping.nextValidName(bdii_site_id))
+        se_latency = se_info.get('GlueSAAccessLatency', 'online').lower()
+        site = mapping.setdefault(se, mapping.nextValidName(bdii_site_id,
+                                                            se_latency))
 
         seSection = cfgPath(cfgBase, site)
         accessSection = cfgPath(seSection, 'AccessProtocol.1')
