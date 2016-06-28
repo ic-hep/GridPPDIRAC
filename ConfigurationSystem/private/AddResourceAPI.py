@@ -367,9 +367,11 @@ def _ldap_vo_info(vo_name, host=None):
     vo_filter = '(GlueVOInfoAccessControlBaseRule=VOMS:/%s/*)' % vo_name
     vo_filter += '(GlueVOInfoAccessControlBaseRule=VOMS:/%s)' % vo_name
     vo_filter += '(GlueVOInfoAccessControlBaseRule=VO:%s)' % vo_name
+    vo_filter += '(GlueVOInfoAccessControlBaseRule=%s)' % vo_name
     vo_filter += '(GlueVOInfoAccessControlRule=VOMS:/%s/*)' % vo_name
     vo_filter += '(GlueVOInfoAccessControlRule=VOMS:/%s)' % vo_name
     vo_filter += '(GlueVOInfoAccessControlRule=VO:%s)' % vo_name
+    vo_filter += '(GlueVOInfoAccessControlRule=%s)' % vo_name
     filt = '(&(objectClass=GlueVOInfo)(|%s))' % vo_filter
     result = ldapsearchBDII(filt=filt, host=host)
     if not result['OK']:
@@ -477,6 +479,9 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
 
             old_path = gConfig.getValue(cfgPath(accessSection, 'Path'), None)
             path = vo_info.get(se, {}).get('Path')
+            if path is None:
+                gLogger.warn("Cannot find 'Path' for vo: %s, se: %s...skipping" % (vo, se))
+                continue
             vo_path = vo_info.get(se, {}).get('VOPath') or os.path.join(path, vo)
 
             # If path is different from last VO then we just default the
