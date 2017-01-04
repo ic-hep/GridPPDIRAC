@@ -5,6 +5,8 @@ API for adding resources to CS
 import os
 import re
 from functools import partial
+from itertools import groupby
+from operator import itemgetter
 from datetime import datetime, date, timedelta
 from types import GeneratorType
 from urlparse import urlparse
@@ -252,6 +254,14 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
 
         se_list = set(se for se in current_ses if se.startswith(site))
         ce_list = set()
+        ces = site_info.get('CEs', {}).itervalues()
+        ce_logicalcpus_nqueues = sorted(((ce_info['GlueSubClusterLogicalCPUs'],
+                                          len(ce_info.get('Queues', [])))
+                                         for ce_info in ces), key=itemgetter(0))
+        grouped_logicalcpus = groupby(ce_logicalcpus_nqueues, key=itemgetter(0))
+        logCPUs_nqueues = {logical_cpus: sum(g[1] for g in group_iter)
+                           for logical_cpus, group_iter in grouped_logicalcpus}
+
         for ce, ce_info in sorted(site_info.get('CEs', {}).iteritems()):
             if ce in banned_ces:
                 continue
@@ -272,8 +282,8 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
                 ce_type = queue_info.get('GlueCEImplementationName', '')
                 max_cpu_time = queue_info.get('GlueCEPolicyMaxCPUTime')
                 if max_cpu_time == "0":
-                  # bug on arc, hard code to 2 days
-                  max_cpu_time = "2880"
+                    # bug on arc, hard code to 2 days
+                    max_cpu_time = "2880"
                 acbr = queue_info.get('GlueCEAccessControlBaseRule')
                 if not isinstance(acbr, (list, tuple, set)):
                     acbr = [acbr]
@@ -287,12 +297,15 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
                     if 'CPUScalingReferenceSI00' in i:
                         q_si00 = i.split('=')[-1].strip()
                         break
-                # MaxTotalJobs in dirac is (running jobs (i.e. hardware) + waiting jobs)    
+                # MaxTotalJobs in dirac is (running jobs (i.e. hardware) + waiting jobs)
+                logical_cpus = ce_info.get('GlueSubClusterLogicalCPUs', 0)
                 max_total_jobs_slots = int(queue_info.get('GlueCEInfoTotalCPUs', 0)) or \
-                                 int(ce_info.get('GlueSubClusterLogicalCPUs', 0))
+                                 int(logical_cpus)
                 max_waiting_jobs = 2 * max_total_jobs_slots
                 max_total_jobs = max_waiting_jobs + 2 * max_total_jobs_slots
-
+                if logical_cpus in logCPUs_nqueues:
+                    max_waiting_jobs = 2 * int(logical_cpus) / logCPUs_nqueues[logical_cpus]
+                    max_total_jobs = 4 * int(logical_cpus) / logCPUs_nqueues[logical_cpus]
                 changeSet.append_unique(queue_path, 'VO', vos)
                 changeSet.add(queue_path, 'SI00', q_si00)
                 changeSet.add(queue_path, 'maxCPUTime', max_cpu_time)
