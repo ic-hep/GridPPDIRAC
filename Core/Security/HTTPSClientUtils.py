@@ -6,6 +6,7 @@ passing of client cert and key files.
 '''
 import urllib2
 import httplib
+import ssl
 from suds.transport.http import HttpTransport
 
 
@@ -15,11 +16,12 @@ class HTTPSClientAuthHandler(urllib2.HTTPSHandler):
 
     handler for HTTPS client authenticated connections
     '''
-    def __init__(self, cert, key):
+    def __init__(self, cert, key, capath):
         '''initialise'''
         urllib2.HTTPSHandler.__init__(self)
-        self.cert = cert
-        self.key = key
+        self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
+        self._ssl_context.load_cert_chain(cert, key)
+        self._ssl_context.load_verify_locations(capath=capath)
 
     def getConnection(self, host, timeout=300):
         '''
@@ -29,8 +31,7 @@ class HTTPSClientAuthHandler(urllib2.HTTPSHandler):
         '''
         return httplib.HTTPSConnection(host,
                                        timeout=timeout,
-                                       cert_file=self.cert,
-                                       key_file=self.key)
+                                       context=self._ssl_context)
 
     def https_open(self, req):
         '''
@@ -46,8 +47,9 @@ class HTTPSClientCertTransport(HttpTransport):
     suds HTTPS transport allowing for client cert and
     key files to be passed through
     '''
-    def __init__(self, cert, key, *args, **kwargs):
+    def __init__(self, cert, key, capath, *args, **kwargs):
         '''initialise'''
         HttpTransport.__init__(self, *args, **kwargs)
         self.urlopener = urllib2.build_opener(HTTPSClientAuthHandler(cert,
-                                                                     key))
+                                                                     key,
+                                                                     capath))

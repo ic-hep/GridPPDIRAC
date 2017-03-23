@@ -8,7 +8,8 @@ ssl._DEFAULT_CIPHERS = 'DEFAULT:!ECDH:!aNULL:!eNULL:!LOW:!EXPORT:!SSLv2'
 
 from suds.client import Client
 from DIRAC import gConfig, S_OK, S_ERROR, gLogger
-from DIRAC.Core.Security.Locations import getHostCertificateAndKeyLocation
+from DIRAC.Core.Security.Locations import (getHostCertificateAndKeyLocation,
+                                           getCAsLocation)
 from DIRAC.Core.Security.VOMSService import (_processListReturn,
                                              _processListDictReturn)
 from GridPPDIRAC.Core.Security.HTTPSClientUtils import HTTPSClientCertTransport
@@ -50,13 +51,15 @@ class MultiVOMSService(object):
                 try:
                     admin = adminUrls.get(vo, url_dict['VOMSAdmin'])
                     httpstransport = HTTPSClientCertTransport(hostCert,
-                                                              hostKey)
+                                                              hostKey,
+                                                              getCAsLocation())
                     adminClient = Client(admin + '?wsdl',
                                          transport=httpstransport)
                     adminClient.set_options(headers={"X-VOMS-CSRF-GUARD": "1"})
                     self.__soapClients[vo] = adminClient
                     break
                 except Exception:
+                    gLogger.warn("Failed to connect suds client to VOMSAdmin URL, retrying...")
                     retries -= 1
             else:
                 gLogger.error("Maximum number of retries reached. Skipping "
