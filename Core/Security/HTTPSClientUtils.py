@@ -22,6 +22,7 @@ class HTTPSClientAuthHandler(urllib2.HTTPSHandler):
         self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
         self._ssl_context.load_cert_chain(cert, key)
         self._ssl_context.load_verify_locations(capath=capath)
+        self._ssl_context.verify_mode = ssl.CERT_REQUIRED
 
     def getConnection(self, host, timeout=300):
         '''
