@@ -533,7 +533,7 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
 
             changeSet.add(vopathSection, vo, vo_path)
             changeSet.add(accessSection, 'Protocol', 'root')
-            changeSet.add(accessSection, 'ProtocolName', 'XROOT')
+            changeSet.add(accessSection, 'ProtocolName', 'GFAL2_XROOT')
             changeSet.add(accessSection, 'Port', port)
             changeSet.add(accessSection, 'Access', 'remote')
             changeSet.add(accessSection, 'Path', path)
