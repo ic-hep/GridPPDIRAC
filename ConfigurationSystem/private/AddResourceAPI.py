@@ -274,6 +274,9 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
                 if max_cpu_time == "0":
                   # bug on arc, hard code to 2 days
                   max_cpu_time = "2880"
+                if max_cpu_time == "2147483647":
+                  # Batch system integration is broken at site
+                  max_cpu_time = "2880"
                 acbr = queue_info.get('GlueCEAccessControlBaseRule')
                 if not isinstance(acbr, (list, tuple, set)):
                     acbr = [acbr]
