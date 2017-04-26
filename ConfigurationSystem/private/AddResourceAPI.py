@@ -509,6 +509,7 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
         changeSet.add(seSection, 'Description', description)
         changeSet.add(seSection, 'VO', bdiiVOs)
         changeSet.add(seSection, 'TotalSize', total_size)
+        changeSet.add(seSection, 'LastSeen', date.today().strftime('%d/%m/%Y'))
 
     return changeSet.commit()
 
