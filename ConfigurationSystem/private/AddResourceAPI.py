@@ -299,7 +299,7 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
                 max_waiting_jobs = 2 * max_total_jobs_slots
                 max_total_jobs = max_waiting_jobs + 2 * max_total_jobs_slots
 
-                changeSet.append_unique(queue_path, 'VO', vos)
+                changeSet.add(queue_path, 'VO', vos)
                 changeSet.add(queue_path, 'SI00', q_si00)
                 changeSet.add(queue_path, 'maxCPUTime', max_cpu_time)
                 changeSet.add(queue_path, 'MaxTotalJobs', max_total_jobs)
@@ -328,8 +328,8 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
         changeSet.add(sitePath, 'Description', description)
         changeSet.add(sitePath, 'Coordinates', '%s:%s' % (longitude, latitude))
         changeSet.add(sitePath, 'Mail', mail)
-        changeSet.append_unique(sitePath, 'CE', ce_list)
-        changeSet.append_unique(sitePath, 'SE', se_list)
+        changeSet.add(sitePath, 'CE', ce_list)
+        changeSet.add(sitePath, 'SE', se_list)
     return changeSet.commit()
 
 
