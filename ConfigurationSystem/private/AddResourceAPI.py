@@ -277,11 +277,14 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
                 if max_cpu_time == "2147483647":
                   # Batch system integration is broken at site
                   max_cpu_time = "2880"
-                acbr = queue_info.get('GlueCEAccessControlBaseRule')
-                if not isinstance(acbr, (list, tuple, set)):
-                    acbr = [acbr]
-                vos = set((rule.replace('VO:', '') for rule in acbr
-                           if rule.startswith('VO:')))
+
+                vos = set()
+                if queue_info.get('GlueCEStateStatus', '').lower() == 'production':
+                    acbr = queue_info.get('GlueCEAccessControlBaseRule')
+                    if not isinstance(acbr, (list, tuple, set)):
+                        acbr = [acbr]
+                    vos = set((rule.replace('VO:', '') for rule in acbr
+                               if rule.startswith('VO:')))
                 q_si00 = ''
                 capability = queue_info.get('GlueCECapability', [])
                 if isinstance(capability, basestring):
