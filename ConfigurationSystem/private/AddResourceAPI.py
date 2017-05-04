@@ -438,6 +438,13 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
                  for i in result['Value'] if 'GlueServiceEndpoint' in i
                  and urlparse(i['GlueServiceEndpoint']).hostname in ses))
 
+    result = ldapService(serviceType='xroot', vo=vo, host=host)
+    if not result['OK']:
+        return result
+    xroots = dict(((urlparse(i['GlueServiceEndpoint']).hostname, i)
+                   for i in result['Value'] if 'GlueServiceEndpoint' in i
+                   and urlparse(i['GlueServiceEndpoint']).hostname in ses))
+
     result = _ldap_vo_info(vo, host=host)
     if not result['OK']:
         return result
@@ -457,7 +464,6 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
         seSection = cfgPath(cfgBase, site)
         accessSection = cfgPath(seSection, 'AccessProtocol.1')
         vopathSection = cfgPath(accessSection, 'VOPath')
-        hostSection = seSection
 
         backend_type = se_info.get('GlueSEImplementationName', 'Unknown')
         description = se_info.get('GlueSEName')
@@ -469,7 +475,6 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
 
         srmDict = srms.get(se)
         if srmDict:
-            hostSection = accessSection
             version = srmDict.get('GlueServiceVersion', '')
             if not version.startswith('2'):
                 gLogger.warn("Not SRM version 2")
@@ -506,8 +511,43 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
             changeSet.add(accessSection, 'Path', path)
             changeSet.add(accessSection, 'SpaceToken', '')
             changeSet.add(accessSection, 'WSUrl', '/srm/managerv2?SFN=')
+            changeSet.add(accessSection, 'Host', se)
 
-        changeSet.add(hostSection, 'Host', se)
+        xrootDict = xroots.get(se)
+        if xrootDict:
+            if srmDict:
+                accessSection = cfgPath(seSection, 'AccessProtocol.2')
+                vopathSection = cfgPath(accessSection, 'VOPath')
+
+            url = urlparse(xrootDict.get('GlueServiceEndpoint', ''))
+            port = str(url.port)
+            if port is None:
+                gLogger.warn("No port determined for %s" % se)
+                continue
+
+            old_path = gConfig.getValue(cfgPath(accessSection, 'Path'), None)
+            path = vo_info.get(se, {}).get('Path')
+            if path is None:
+                gLogger.warn("Cannot find 'Path' for vo: %s, se: %s...skipping" % (vo, se))
+                continue
+            vo_path = vo_info.get(se, {}).get('VOPath') or os.path.join(path, vo)
+
+            # If path is different from last VO then we just default the
+            # path to / and use the VOPath dict
+            if old_path and path and path != old_path:
+                path = '/'
+
+            changeSet.add(vopathSection, vo, vo_path)
+            changeSet.add(accessSection, 'Protocol', 'root')
+            changeSet.add(accessSection, 'ProtocolName', 'GFAL2_XROOT')
+            changeSet.add(accessSection, 'Port', port)
+            changeSet.add(accessSection, 'Access', 'remote')
+            changeSet.add(accessSection, 'Path', path)
+            changeSet.add(accessSection, 'SpaceToken', '')
+            changeSet.add(accessSection, 'Host', se)
+
+        if not srmDict and not xrootDict:
+            changeSet.add(seSection, 'Host', se)
         changeSet.add(seSection, 'BackendType', backend_type)
         changeSet.add(seSection, 'Description', description)
         changeSet.add(seSection, 'VO', bdiiVOs)
