@@ -206,7 +206,12 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
     if banned_ces is None:
         banned_ces = []
 
-    result = getBdiiCEInfo(vo, host=host)
+    try:
+        result = getBdiiCEInfo(vo, host=host)
+    except KeyError as e:
+        msg = "Problem getting BDII info: %s" % e.message
+        gLogger.error(msg)
+        return S_ERROR(msg)
     if not result['OK']:
         gLogger.error("Problem getting BDII info")
         return result
