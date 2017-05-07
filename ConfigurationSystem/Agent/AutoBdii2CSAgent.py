@@ -22,6 +22,7 @@ from DIRAC.FrameworkSystem.Client.NotificationClient import NotificationClient
 from GridPPDIRAC.ConfigurationSystem.private.AddResourceAPI import (checkUnusedCEs,
                                                                     checkUnusedSEs,
                                                                     removeOldCEs,
+                                                                    rebuildSiteLists,
                                                                     findOldSEs)
 
 
@@ -89,6 +90,11 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
             if not result['OK']:
                 self.log.error("Error while running removal of old CEs: "
                                "%s" % result['Message'])
+
+        # Rebuild the CE & SE lists for the CE
+        result = rebuildSiteLists(domain=self.domain)
+        if not result['OK']:
+            self.log.error("Failed to rebuild site lists: %s" % result['Message'])
 
         # Send notification of old SEs if ail addresses are set
         if self.addressTo and self.addressFrom:

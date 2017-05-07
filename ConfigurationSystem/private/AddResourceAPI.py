@@ -277,13 +277,10 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
                         .replace('mailto:', '')\
                         .strip()
 
-        se_list = set(se for se in current_ses if se.startswith(site))
-        ce_list = set()
         for ce, ce_info in sorted(site_info.get('CEs', {}).iteritems()):
             if ce in banned_ces:
                 continue
             ce_path = cfgPath(sitePath, 'CEs', ce)
-            ce_list.add(ce)
 
             arch = ce_info.get('GlueHostArchitecturePlatformType', '')
             num_cores = int(ce_info.get('GlueHostArchitectureSMPSize', 1))
@@ -355,8 +352,49 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
         changeSet.add(sitePath, 'Description', description)
         changeSet.add(sitePath, 'Coordinates', '%s:%s' % (longitude, latitude))
         changeSet.add(sitePath, 'Mail', mail)
-        changeSet.add(sitePath, 'CE', ce_list)
-        changeSet.add(sitePath, 'SE', se_list)
+    return changeSet.commit()
+
+
+def rebuildSiteLists(domain='LCG'):
+    ''' Rebuilds the CE & SE lists for all of the sites in the CS. '''
+
+    # Prefetch the full list of SEs
+    result = gConfig.getSections('/Resources/StorageElements')
+    current_ses = set()
+    if result['OK']:
+        current_ses.update(result['Value'])
+    else:
+        return S_ERROR("Couldn't get current CS list of SEs")
+    
+    cfgBase = "/Resources/Sites/%s" % domain
+    sites = set()
+    result = gConfig.getSections(cfgBase)
+    sites = set()
+    if result['OK']:
+        sites.update(result['Value'])
+    else:
+        return S_ERROR("Couldn't get current CS list of sites")
+
+    changeSet = _ConfigurationSystem()
+    for site in sites:
+        site_base_name = site.split(".")[1]
+        sitePath = "%s/%s" % (cfgBase, site)
+        
+        # Get the CEs
+        site_ces = set()
+        CEsPath = "%s/CEs" % sitePath
+        result = gConfig.getSections(CEsPath)
+        if result['OK']:
+            site_ces.update(result['Value'])
+        else:
+            gLogger.warn("Failed to get CEs for site %s." % site)
+  
+        # Get the SEs
+        site_ses = set(se for se in current_ses if se.startswith(site_base_name))
+
+        changeSet.add(sitePath, 'CE', sorted(list(site_ces)))
+        changeSet.add(sitePath, 'SE', sorted(list(site_ses)))
+
     return changeSet.commit()
 
 
@@ -636,6 +674,16 @@ if __name__ == '__main__':
     result = removeOldCEs(domain=options.domain)
     if not result['OK']:
         gLogger.error("Error while running check for old sites:",
+                      result['Message'])
+        sys.exit(1)
+
+    gLogger.notice('')
+    gLogger.notice('** Updating site CE/SE lists')
+    gLogger.notice('-------------------------')
+
+    result = rebuildSiteLists(domain=options.domain)
+    if not result['OK']:
+        gLogger.error("Error while running site list update:",
                       result['Message'])
         sys.exit(1)
 
