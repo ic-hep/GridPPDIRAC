@@ -13,11 +13,16 @@ if necessary settings which were changed in the BDII recently
 
 __RCSID__ = "$Id$"
 
+from datetime import datetime, date, timedelta
+
 from DIRAC import S_OK
+from DIRAC.ConfigurationSystem.Client.CSAPI import CSAPI
 from DIRAC.ConfigurationSystem.Agent.Bdii2CSAgent import Bdii2CSAgent
+from DIRAC.FrameworkSystem.Client.NotificationClient import NotificationClient
 from GridPPDIRAC.ConfigurationSystem.private.AddResourceAPI import (checkUnusedCEs,
                                                                     checkUnusedSEs,
-                                                                    removeOldCEs)
+                                                                    removeOldCEs,
+                                                                    findOldSEs)
 
 
 class AutoBdii2CSAgent(Bdii2CSAgent):
@@ -85,4 +90,52 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
                 self.log.error("Error while running removal of old CEs: "
                                "%s" % result['Message'])
 
+        # Send notification of old SEs if ail addresses are set
+        if self.addressTo and self.addressFrom:
+            result = findOldSEs()
+            if result['OK']:
+                old_ses = result['Value']
+                # Don't do anything unless there actually are some old SEs...
+                if old_ses:
+                    # Check when the last notification was sent
+                    last_notif_str = self.am_getOption('LastNotification', None)
+                    last_notif = None
+                    if last_notif_str:
+                        last_notif = datetime.strptime(last_notif_str, '%d/%m/%Y').date()
+                    if not last_notif or (date.today() - last_notif > timedelta(days=7)):
+                        # Notification has never been sent, or it has been more than threshold days
+                        notification = NotificationClient()
+                        subject = "GridPP DIRAC Old SE Notification"
+                        body =  "Hi,\n"
+                        body += "\n"
+                        body += "The following SEs haven't been seen for a while and probably need removing:\n"
+                        body += "\n"
+                        for se_name, last_seen in old_ses:
+                            body += " - %s (%s)\n" % (se_name, last_seen)
+                        body += "\n"
+                        body += "Regards,\n"
+                        body += "DIRAC AutoBDII2CS Agent\n"
+                        self.log.info('Sending old SE notification (%s).' % old_ses)
+                        result = notification.sendMail(self.addressTo, subject, body,
+                                                       self.addressFrom, localAttempt = False)
+                        if not result['OK']:
+                            self.log.error('Failed to send old SEs e-mail: ', result['Message'])
+
+                        # Now store the date the LastNotification was sent
+                        # We store this in both the module options and CS
+                        date_str = date.today().strftime('%d/%m/%Y')
+                        self.am_setOption('LastNotification', date_str)
+                        conf_path = "%s/%s" % (self.am_getModuleParam('section'), 'LastNotification')
+                        cs = CSAPI()
+                        cs.initialize()
+                        cs.setOption(conf_path, date_str)
+                        cs.commit()
+                    else:
+                        self.log.info('Not sending old SE notification yet.')
+                else:
+                    self.log.info('No old SEs found.')
+            else:
+                self.log.error("Failed to get old SEs.")
+
         return S_OK()
+

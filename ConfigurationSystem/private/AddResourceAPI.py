@@ -192,6 +192,33 @@ def removeOldCEs(threshold=5, domain='LCG', banned_ces=None):
     return cs.commit()
 
 
+def findOldSEs(threshold=14):
+    '''
+    Sends an e-mail listing any old SEs which should probably be removed.
+    Considers SEs older than threshold.
+    '''
+    old_ses = set()
+
+    cs = _ConfigurationSystem()
+    result = cs.getCurrentCFG()
+    if not result['OK']:
+        gLogger.error('Could not get current SEs from the CS')
+        return result
+    base_path = '/Resources/StorageElements'
+    se_dict = result['Value'].getAsDict(base_path)
+    for se, se_info in se_dict.iteritems():
+        if 'LastSeen' not in se_info:
+            # No date for this SE... It was manually added -> ignore it
+            continue
+        last_seen_str = se_info['LastSeen']
+        last_seen = datetime.strptime(last_seen_str, '%d/%m/%Y').date()
+        if date.today() - last_seen > timedelta(days=threshold):
+            old_ses.add( (se, last_seen_str) )
+
+    retval = sorted(list(old_ses))
+    return S_OK(retval)
+
+
 def checkUnusedCEs(vo, host=None, domain='LCG',
                    country_default='xx', banned_ces=None):
     '''
