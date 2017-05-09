@@ -3,7 +3,9 @@ MultiVOMSService
 
 VOMS SOAP Services for multiple VOs
 '''
+import os
 import ssl
+import traceback
 ssl._DEFAULT_CIPHERS = 'DEFAULT:!ECDH:!aNULL:!eNULL:!LOW:!EXPORT:!SSLv2'
 
 from suds.client import Client
@@ -56,15 +58,21 @@ class MultiVOMSService(object):
                     adminClient = Client(admin + '?wsdl',
                                          transport=httpstransport)
                     adminClient.set_options(headers={"X-VOMS-CSRF-GUARD": "1"})
-                    self.__soapClients[vo] = adminClient
+                    compatClient = Client(os.path.join(os.path.dirname(admin),
+                                                       'VOMSCompatibility?wsdl'),
+                                          transport=HTTPSClientCertTransport(hostCert,
+                                                                             hostKey,
+                                                                             getCAsLocation()))
+                    compatClient.set_options(headers={"X-VOMS-CSRF-GUARD": "1"})
+                    self.__soapClients[vo] = {'Admin': adminClient, 'Compat': compatClient}
                     break
                 except Exception:
-                    gLogger.warn("Failed to connect suds client to VOMSAdmin URL, retrying...")
+                    gLogger.warn("Failed to connect suds client to VOMSAdmin or VOMSCompatibility URL, retrying...")
                     retries -= 1
             else:
                 gLogger.error("Maximum number of retries reached. Skipping "
                               "setting up VOMSService for VO: %s" % vo)
-
+                gLogger.error(traceback.format_exc())
         if not self.__soapClients:
             raise RuntimeError("Couldn't setup ANY SOAP clients")
 
@@ -73,10 +81,15 @@ class MultiVOMSService(object):
         '''Return list of VOs'''
         return self.__vos
 
+    def getSuspendedMembers(self, vo):
+        voms_users = set(user['DN'] for user in self.__soapClients[vo]['Admin'].service.listMembers())
+        voms_valid_users = set(self.__soapClients[vo]['Compat'].service.getGridmapUsers())
+        return list(voms_users.difference(voms_valid_users))
+
     def admListMembers(self, vo):
         '''List VO members'''
         try:
-            result = self.__soapClients[vo].service.listMembers()
+            result = self.__soapClients[vo]['Admin'].service.listMembers()
         except Exception, e:
             return S_ERROR("Error in function listMembers: %s" % str(e))
         if 'listMembersReturn' in dir(result):
@@ -86,7 +99,7 @@ class MultiVOMSService(object):
     def admListRoles(self, vo):
         '''List VO Roles'''
         try:
-            result = self.__soapClients[vo].service.listRoles()
+            result = self.__soapClients[vo]['Admin'].service.listRoles()
         except Exception, e:
             return S_ERROR("Error in function listRoles: %s" % str(e))
         if 'listRolesReturn' in dir(result):
@@ -96,8 +109,8 @@ class MultiVOMSService(object):
     def admListUsersWithRole(self, vo, group, role):
         '''List all users with given role'''
         try:
-            result = self.__soapClients[vo].service\
-                                           .listUsersWithRole(group, role)
+            result = self.__soapClients[vo]['Admin'].service\
+                                                    .listUsersWithRole(group, role)
         except Exception, e:
             return S_ERROR("Error in function listUsersWithRole: %s" % str(e))
         if result is None:
@@ -109,7 +122,7 @@ class MultiVOMSService(object):
     def admGetVOName(self, vo):
         '''Get VO name from VOMS'''
         try:
-            result = self.__soapClients[vo].service.getVOName()
+            result = self.__soapClients[vo]['Admin'].service.getVOName()
         except Exception, e:
             return S_ERROR("Error in function getVOName: %s" % str(e))
         return S_OK(result)
