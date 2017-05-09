@@ -58,7 +58,8 @@ class MultiVOMSService(object):
                     adminClient = Client(admin + '?wsdl',
                                          transport=httpstransport)
                     adminClient.set_options(headers={"X-VOMS-CSRF-GUARD": "1"})
-                    compatClient = Client(os.path.dirname(admin) + 'VOMSCompatibility?wsdl',
+                    compatClient = Client(os.path.join(os.path.dirname(admin),
+                                                       'VOMSCompatibility?wsdl'),
                                           transport=HTTPSClientCertTransport(hostCert,
                                                                              hostKey,
                                                                              getCAsLocation()))
