@@ -3,7 +3,9 @@ MultiVOMSService
 
 VOMS SOAP Services for multiple VOs
 '''
+import os
 import ssl
+import traceback
 ssl._DEFAULT_CIPHERS = 'DEFAULT:!ECDH:!aNULL:!eNULL:!LOW:!EXPORT:!SSLv2'
 
 from suds.client import Client
@@ -56,7 +58,7 @@ class MultiVOMSService(object):
                     adminClient = Client(admin + '?wsdl',
                                          transport=httpstransport)
                     adminClient.set_options(headers={"X-VOMS-CSRF-GUARD": "1"})
-                    compatClient = Client(os.path.basename(admin) + 'VOMSCompatibility?wsdl',
+                    compatClient = Client(os.path.dirname(admin) + 'VOMSCompatibility?wsdl',
                                           transport=HTTPSClientCertTransport(hostCert,
                                                                              hostKey,
                                                                              getCAsLocation()))
@@ -69,7 +71,7 @@ class MultiVOMSService(object):
             else:
                 gLogger.error("Maximum number of retries reached. Skipping "
                               "setting up VOMSService for VO: %s" % vo)
-
+                gLogger.error(traceback.format_exc())
         if not self.__soapClients:
             raise RuntimeError("Couldn't setup ANY SOAP clients")
 
