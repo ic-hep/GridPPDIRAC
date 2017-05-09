@@ -113,6 +113,7 @@ class UsersAndGroupsAPI(object):
 
             ## Users
             ################################################################
+            suspended_members = self._vomsSrv.getSuspendedMembers(vo)
             result = self._vomsSrv.admListMembers(vo)
             if not result['OK']:
                 gLogger.warn('Could not retrieve registered user entries in '
@@ -135,7 +136,7 @@ class UsersAndGroupsAPI(object):
                     usersInVOMS.setdefault(user['DN'], user)\
                                .setdefault('Email', set())\
                                .add(mail)
-                if default_group:
+                if default_group and user['DN'] not in suspended_members:
                     #groupsInVOMS.add(default_group)
                     usersInVOMS.setdefault(user['DN'], user)\
                                .setdefault('Groups', set())\
@@ -169,7 +170,7 @@ class UsersAndGroupsAPI(object):
                     continue
                 for groupuser in result['Value']:
                     gdn = groupuser['DN']
-                    if gdn in usersInVOMS:
+                    if gdn in usersInVOMS and gdn not in suspended_members:
                         #groupsInVOMS.add(dirac_group)
                         usersInVOMS[gdn].setdefault('Groups', set())\
                                         .add(dirac_group)
