@@ -43,6 +43,13 @@ class JobPlatform( OptimizerExecutor ):
       # User didn't set platform, user default
       job_plat = def_plat
       manifest.setOption( "Platform", def_plat )
+      # We also have to set the platform in the job requirements
+      result = manifest.getSection( "JobRequirements" )
+      if not result[ 'OK' ]:
+        self.jobLog.error( "Failed to get job requirements." )
+        return S_ERROR( "Failed to get job requirements." ) 
+      requirements = result[ 'Value' ]
+      requirements.setOption( "Platforms", def_plat )
       self.jobLog.info( "Set job platform to default (%s)." % def_plat )
 
     return self.setNextOptimizer( jobState )
