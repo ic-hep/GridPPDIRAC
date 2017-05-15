@@ -43,7 +43,10 @@ class JobPlatform( OptimizerExecutor ):
     if job_plat and job_plat.lower() == "anyplatform":
       # User really wants _any_ platform, so remove the option
       manifest.remove( "Platform" )
-      requirements.remove( "Platforms" )
+      try:
+        requirements.deleteKey( "Platforms" )
+      except KeyError:
+        pass # If Platforms doesn't exist, it doesn't matter.
       self.jobLog.info( "Removed job platform." )
     elif not job_plat:
       # User didn't set platform, user default
