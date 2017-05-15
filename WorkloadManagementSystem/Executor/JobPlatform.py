@@ -40,7 +40,7 @@ class JobPlatform( OptimizerExecutor ):
       return S_ERROR( "Failed to get job requirements." ) 
     requirements = result[ 'Value' ]
 
-    if job_plat and job_plat.lower() == "AnyPlatform":
+    if job_plat and job_plat.lower() == "anyplatform":
       # User really wants _any_ platform, so remove the option
       manifest.remove( "Platform" )
       requirements.remove( "Platforms" )
