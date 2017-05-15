@@ -35,7 +35,7 @@ class JobPlatform( OptimizerExecutor ):
     manifest = result["Value"]
     job_plat = manifest.getOption( "Platform" )
 
-    if job_plat and job_plat.lower() == "any":
+    if job_plat and job_plat.lower() == "AnyPlatform":
       # User really wants _any_ platform, so remove the option
       manifest.remove( "Platform" )
       self.jobLog.info( "Removed job platform." )
