@@ -11,7 +11,7 @@ from urlparse import urlparse
 from DIRAC import gLogger, gConfig, S_OK, S_ERROR
 from DIRAC.ConfigurationSystem.Client.CSAPI import CSAPI
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
-from DIRAC.Core.Utilities.Grid import (getBdiiCEInfo, ldapSE,
+from DIRAC.Core.Utilities.Grid import (getBdiiCEInfo, ldapSE, ldapSEAccessProtocol,
                                        ldapService, ldapsearchBDII)
 
 
@@ -503,13 +503,6 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
                  for i in result['Value'] if 'GlueServiceEndpoint' in i
                  and urlparse(i['GlueServiceEndpoint']).hostname in ses))
 
-    result = ldapService(serviceType='xroot', vo=vo, host=host)
-    if not result['OK']:
-        return result
-    xroots = dict(((urlparse(i['GlueServiceEndpoint']).hostname, i)
-                   for i in result['Value'] if 'GlueServiceEndpoint' in i
-                   and urlparse(i['GlueServiceEndpoint']).hostname in ses))
-
     result = _ldap_vo_info(vo, host=host)
     if not result['OK']:
         return result
@@ -578,14 +571,19 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
             changeSet.add(accessSection, 'WSUrl', '/srm/managerv2?SFN=')
             changeSet.add(accessSection, 'Host', se)
 
-        xrootDict = xroots.get(se)
-        if xrootDict:
+        xroots = [urlparse(i.get('GlueSEAccessProtocolEndpoint', '')).port
+                  for i in ldapSEAccessProtocol(se, host=host).get('Value', [])
+                  if i.get('GlueSEAccessProtocolType', '').lower().find('root') > -1]
+        if xroots:
             if srmDict:
                 accessSection = cfgPath(seSection, 'AccessProtocol.2')
                 vopathSection = cfgPath(accessSection, 'VOPath')
 
-            url = urlparse(xrootDict.get('GlueServiceEndpoint', ''))
-            port = str(url.port)
+            port = None
+            ports = [p for p in xroots if p is not None]
+            if ports:
+                port = 1094 if 1094 in ports else min(ports)
+
             if port is None:
                 gLogger.warn("No port determined for %s" % se)
                 continue
@@ -611,7 +609,7 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
             changeSet.add(accessSection, 'SpaceToken', '')
             changeSet.add(accessSection, 'Host', se)
 
-        if not srmDict and not xrootDict:
+        if not srmDict and not xroots:
             changeSet.add(seSection, 'Host', se)
         changeSet.add(seSection, 'BackendType', backend_type)
         changeSet.add(seSection, 'Description', description)
