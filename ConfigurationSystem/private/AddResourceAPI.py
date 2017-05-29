@@ -563,7 +563,7 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
 
             changeSet.add(vopathSection, vo, vo_path)
             changeSet.add(accessSection, 'Protocol', 'srm')
-            changeSet.add(accessSection, 'ProtocolName', 'GFAL2_SRM2')
+            changeSet.add(accessSection, 'PluginName', 'GFAL2_SRM2')
             changeSet.add(accessSection, 'Port', port)
             changeSet.add(accessSection, 'Access', 'remote')
             changeSet.add(accessSection, 'Path', path)
@@ -602,7 +602,7 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
 
             changeSet.add(vopathSection, vo, vo_path)
             changeSet.add(accessSection, 'Protocol', 'root')
-            changeSet.add(accessSection, 'ProtocolName', 'GFAL2_XROOT')
+            changeSet.add(accessSection, 'PluginName', 'GFAL2_XROOT')
             changeSet.add(accessSection, 'Port', port)
             changeSet.add(accessSection, 'Access', 'remote')
             changeSet.add(accessSection, 'Path', path)
