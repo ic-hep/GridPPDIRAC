@@ -3,7 +3,7 @@
 """
 
 from DIRAC import S_OK, S_ERROR
-from GridPPDIRAC.FrameworkSystem.Agent.HelloWorld import HelloWorldAgent
+from GridPPDIRAC.FrameworkSystem.Agent.HelloWorldAgent import HelloWorldAgent
 
 __RCSID__ = "Id: $"
 
