@@ -6,10 +6,12 @@ install:
   - "pip install --upgrade setuptools"
   - "pip install --upgrade pip"
   - "pip install -r requirements.txt"
+# setup the main DIRAC repo
+  - git clone -b rel-v6r17 https://github.com/DIRACGrid/DIRAC
 # command to run tests
 script:
-  - export PYTHONPATH=${PWD%/*}
-  - ls $PYTHONPATH
+  - export PYTHONPATH=${PWD}/DIRAC:${PWD}/GridPPDIRAC
+  - echo $PYTHONPATH
   - py.test
 after_success:
   - coveralls
