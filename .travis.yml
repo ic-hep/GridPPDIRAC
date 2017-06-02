@@ -15,3 +15,9 @@ script:
   - py.test
 after_success:
   - coveralls
+
+# only commits to master trigger a bulid
+# other branches are build on PR.
+branches:
+  only:
+    - master
