@@ -21,10 +21,9 @@ def printVersion( log ):
 
   log.info( "Running %s" % " ".join( sys.argv ) )
   try:
-    fd = open( "%s.run" % sys.argv[0], "w" )
-    pickle.dump( sys.argv[1:], fd )
-    fd.close()
-  except:
+    with open( "%s.run" % sys.argv[0], "w" ) as fd:
+      pickle.dump( sys.argv[1:], fd )
+  except OSError:
     pass
   log.info( "Version %s" % __RCSID__ )
 
@@ -35,7 +34,8 @@ def pythonPathCheck():
     pythonpath = os.getenv( 'PYTHONPATH', '' ).split( ':' )
     print 'Directories in PYTHONPATH:', pythonpath
     for p in pythonpath:
-      if p == '': continue
+      if p == '':
+        continue
       try:
         if os.path.normpath( p ) in sys.path:
           # In case a given directory is twice in PYTHONPATH it has to removed only once
@@ -51,10 +51,10 @@ def pythonPathCheck():
     print "[EXCEPTION-info] sys.version:", sys.version
     print "[EXCEPTION-info] os.uname():", os.uname()
     raise x
-  
+
 def alarmTimeoutHandler( *args ):
-  raise Exception( 'Timeout' )  
-  
+  raise Exception( 'Timeout' )
+
 def retrieveUrlTimeout( url, fileName, log, timeout = 0 ):
   """
    Retrieve remote url to local file, with timeout wrapper
@@ -70,13 +70,12 @@ def retrieveUrlTimeout( url, fileName, log, timeout = 0 ):
     # Sometimes repositories do not return Content-Length parameter
     try:
       expectedBytes = long( remoteFD.info()[ 'Content-Length' ] )
-    except Exception, x:
+    except Exception as x:
       expectedBytes = 0
     data = remoteFD.read()
     if fileName:
-      localFD = open( fileName + '-local', "wb" )
-      localFD.write( data )
-      localFD.close()
+      with open( fileName + '-local', "wb" ) as localFD:
+        localFD.write( data )
     else:
       urlData += data
     remoteFD.close()
@@ -105,8 +104,8 @@ def retrieveUrlTimeout( url, fileName, log, timeout = 0 ):
       log.error( 'Timeout after %s seconds on transfer request for "%s"' % ( str( timeout ), url ) )
     if timeout:
       signal.alarm( 0 )
-    raise x  
-  
+    raise x
+
 
 class ObjectLoader( object ):
   """ Simplified class for loading objects from a DIRAC installation.
@@ -187,17 +186,17 @@ class ObjectLoader( object ):
 def getCommand( params, commandName, log ):
   """ Get an instantiated command object for execution.
       Commands are looked in the following modules in the order:
-      
+
       1. <CommandExtension>Commands
       2. pilotCommands
       3. <Extension>.WorkloadManagementSystem.PilotAgent.<CommandExtension>Commands
       4. <Extension>.WorkloadManagementSystem.PilotAgent.pilotCommands
       5. DIRAC.WorkloadManagementSystem.PilotAgent.<CommandExtension>Commands
       6. DIRAC.WorkloadManagementSystem.PilotAgent.pilotCommands
-      
+
       Note that commands in 3.-6. can only be used of the the DIRAC installation
-      has been done. DIRAC extensions are taken from -e ( --extraPackages ) option 
-      of the pilot script.  
+      has been done. DIRAC extensions are taken from -e ( --extraPackages ) option
+      of the pilot script.
   """
   extensions = params.commandExtensions
   modules = [ m + 'Commands' for m in extensions + ['pilot'] ]
@@ -220,12 +219,12 @@ def getCommand( params, commandName, log ):
       if not ext.endswith( 'DIRAC' ):
         diracExtensions.append( ext + 'DIRAC' )
       else:
-        diracExtensions.append( ext )  
+        diracExtensions.append( ext )
     diracExtensions += ['DIRAC']
     ol = ObjectLoader( diracExtensions, log )
     for module in modules:
-      commandObject, modulePath = ol.loadObject( 'WorkloadManagementSystem.PilotAgent', 
-                                                 module, 
+      commandObject, modulePath = ol.loadObject( 'WorkloadManagementSystem.PilotAgent',
+                                                 module,
                                                  commandName )
       if commandObject:
         return commandObject( params ), modulePath
@@ -244,21 +243,19 @@ class Logger( object ):
 
   def __outputMessage( self, msg, level, header ):
     if self.out:
-      outputFile = open( self.out, 'a' )
-    for _line in msg.split( "\n" ):
-      if header:
-        outLine = "%s UTC %s [%s] %s" % ( time.strftime( '%Y-%m-%d %H:%M:%S', time.gmtime() ),
-                                          level,
-                                          self.name,
-                                          _line )
-        print outLine
-        if self.out:
-          outputFile.write( outLine + '\n' )
-      else:
-        print _line
-        outputFile.write( _line + '\n' )
-    if self.out:
-      outputFile.close()
+      with open( self.out, 'a' ) as outputFile:
+        for _line in msg.split( "\n" ):
+          if header:
+            outLine = "%s UTC %s [%s] %s" % ( time.strftime( '%Y-%m-%d %H:%M:%S', time.gmtime() ),
+                                              level,
+                                              self.name,
+                                              _line )
+            print outLine
+            if self.out:
+              outputFile.write( outLine + '\n' )
+          else:
+            print _line
+            outputFile.write( _line + '\n' )
     sys.stdout.flush()
 
   def setDebug( self ):
@@ -310,11 +307,11 @@ class CommandBase( object ):
       outData = _p.stdout.read().strip()
       for line in outData:
         sys.stdout.write( line )
-      sys.stdout.write( '\n' )  
+      sys.stdout.write( '\n' )
 
       for line in _p.stderr:
         sys.stdout.write( line )
-      sys.stdout.write( '\n' )    
+      sys.stdout.write( '\n' )
 
       # return code
       returnCode = _p.wait()
@@ -351,14 +348,14 @@ class PilotParams( object ):
     self.workingDir = os.getcwd()
 
     self.optList = {}
-    self.keepPythonPath = False
     self.debugFlag = False
     self.local = False
-    self.commandExtensions = ['GridPP']
-    self.commands = ['GetPilotVersion', 'CheckWorkerNode', 'GitInstallDIRAC',
-                     'ConfigureBasics', 'ConfigureSite', 'ConfigureArchitecture', 'ConfigureCPURequirements',
+    self.commandExtensions = []
+    self.commands = ['GetPilotVersion', 'CheckWorkerNode', 'InstallDIRAC', 'ConfigureBasics', 'CheckCECapabilities',
+                     'CheckWNCapabilities', 'ConfigureSite', 'ConfigureArchitecture', 'ConfigureCPURequirements',
                      'LaunchAgent']
     self.extensions = []
+    self.tags = []
     self.site = ""
     self.setup = ""
     self.configServer = ""
@@ -374,13 +371,14 @@ class PilotParams( object ):
     self.userDN = ""
     self.maxCycles = self.MAX_CYCLES
     self.flavour = 'DIRAC'
-    self.gridVersion = '2014-04-09'
+    self.gridVersion = ''
     self.pilotReference = ''
     self.releaseVersion = ''
     self.releaseProject = ''
     self.gateway = ""
     self.useServerCertificate = False
     self.pilotScriptName = ''
+    self.genericOption = ''
     # DIRAC client installation environment
     self.diracInstalled = False
     self.diracExtensions = []
@@ -394,9 +392,6 @@ class PilotParams( object ):
     self.certsLocation = '%s/etc/grid-security' % self.workingDir
     self.pilotCFGFile = 'pilot.json'
     self.pilotCFGFileLocation = 'http://lhcbproject.web.cern.ch/lhcbproject/dist/DIRAC3/defaults/'
-    ##settings for git checkout
-    ## A list of (url, branch) tuples
-    self.gitRepos = []
 
     # Pilot command options
     self.cmdOpts = ( ( 'b', 'build', 'Force local compilation' ),
@@ -407,7 +402,6 @@ class PilotParams( object ):
                      ( 'g:', 'grid=', 'lcg tools package version' ),
                      ( 'h', 'help', 'Show this help' ),
                      ( 'i:', 'python=', 'Use python<26|27> interpreter' ),
-                     ( 'k', 'keepPP', 'Do not clear PYTHONPATH on start' ),
                      ( 'l:', 'project=', 'Project to install' ),
                      ( 'p:', 'platform=', 'Use <platform> instead of local one' ),
                      ( 'u:', 'url=', 'Use <url> to download tarballs' ),
@@ -424,7 +418,7 @@ class PilotParams( object ):
                      ( 'G:', 'Group=', 'DIRAC Group to use' ),
                      ( 'O:', 'OwnerDN', 'Pilot OwnerDN (for private pilots)' ),
                      ( 'U', 'Upload', 'Upload compiled distribution (if built)' ),
-                     ( 'V:', 'VO=', 'Virtual Organization' ),
+                     ( 'V:', 'installation=', 'Installation configuration file' ),
                      ( 'W:', 'gateway=', 'Configure <gateway> as DIRAC Gateway during installation' ),
                      ( 's:', 'section=', 'Set base section for relative parsed options' ),
                      ( 'o:', 'option=', 'Option=value to add' ),
@@ -434,7 +428,6 @@ class PilotParams( object ):
                      ( 'F:', 'pilotCFGFile=', 'Specify pilot CFG file' ),
                      ( 'R:', 'reference=', 'Use this pilot reference' ),
                      ( 'x:', 'execute=', 'Execute instead of JobAgent' ),
-                     ( 't:', 'git=', 'git url[@branch] to clone (may be specified multiple times)' ),
                    )
 
     self.__initOptions()
@@ -460,11 +453,9 @@ class PilotParams( object ):
       elif o == '-y' or o == '--CEType':
         self.ceType = v
       elif o == '-Q' or o == '--Queue':
-        self.queueName = v  
+        self.queueName = v
       elif o == '-R' or o == '--reference':
         self.pilotReference = v
-      elif o == '-k' or o == '--keepPP':
-        self.keepPythonPath = True
       elif o == '-d' or o == '--debug':
         self.debugFlag = True
       elif o in ( '-S', '--setup' ):
@@ -477,7 +468,6 @@ class PilotParams( object ):
         self.executeCmd = v
       elif o in ( '-O', '--OwnerDN' ):
         self.userDN = v
-
       elif o in ( '-V', '--installation' ):
         self.installation = v
       elif o == '-p' or o == '--platform':
@@ -485,7 +475,7 @@ class PilotParams( object ):
       elif o == '-D' or o == '--disk':
         try:
           self.minDiskSpace = int( v )
-        except:
+        except ValueError:
           pass
       elif o == '-r' or o == '--release':
         self.releaseVersion = v.split(',',1)[0]
@@ -504,14 +494,9 @@ class PilotParams( object ):
       elif o == '-M' or o == '--MaxCycles':
         try:
           self.maxCycles = min( self.MAX_CYCLES, int( v ) )
-        except:
+        except ValueError:
           pass
       elif o in ( '-T', '--CPUTime' ):
         self.jobCPUReq = v
-      elif o in ( '-t', '--git' ):
-        if "@" in v:
-          url, branch = v.split("@")
-        else:
-          url = v
-          branch = None
-        self.gitRepos.append( (url, branch, ) )
+      elif o in ( '-o', '--option' ):
+        self.genericOption = v
