@@ -301,6 +301,8 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
                 if max_cpu_time == "2147483647":
                   # Batch system integration is broken at site
                   max_cpu_time = "2880"
+                if max_cpu_time is None:
+                    max_cpu_time = '0'
 
                 vos = set()
                 if queue_info.get('GlueCEStateStatus', '').lower() == 'production':
