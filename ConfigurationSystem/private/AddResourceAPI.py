@@ -220,7 +220,7 @@ def findOldSEs(threshold=14):
 
 
 def checkUnusedCEs(vo, host=None, domain='LCG',
-                   country_default='xx', banned_ces=None, max_processors):
+                   country_default='xx', banned_ces=None, max_processors=None):
     '''
     Check for unused CEs and add them where possible
 
