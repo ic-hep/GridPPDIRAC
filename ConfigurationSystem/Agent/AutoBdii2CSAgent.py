@@ -77,7 +77,8 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
                                         host=self.bdii_host,
                                         domain=self.domain,
                                         country_default=self.country_default,
-                                        banned_ces=self.banned_ces)
+                                        banned_ces=self.banned_ces,
+                                        max_processors=self.am_getOption('FixedMaxProcessors', None))
                 if not result['OK']:
                     self.log.error("Error while running check for unused CEs "
                                    "in the VO %s: %s"

@@ -220,7 +220,7 @@ def findOldSEs(threshold=14):
 
 
 def checkUnusedCEs(vo, host=None, domain='LCG',
-                   country_default='xx', banned_ces=None):
+                   country_default='xx', banned_ces=None, max_processors=None):
     '''
     Check for unused CEs and add them where possible
 
@@ -283,7 +283,7 @@ def checkUnusedCEs(vo, host=None, domain='LCG',
             ce_path = cfgPath(sitePath, 'CEs', ce)
 
             arch = ce_info.get('GlueHostArchitecturePlatformType', '')
-            num_cores = int(ce_info.get('GlueHostArchitectureSMPSize', 1))
+            num_cores = int(max_processors or ce_info.get('GlueHostArchitectureSMPSize', 1))
             si00 = ce_info.get('GlueHostBenchmarkSI00', '')
             ram = ce_info.get('GlueHostMainMemoryRAMSize', '')
             os_name = ce_info.get('GlueHostOperatingSystemName', '')
