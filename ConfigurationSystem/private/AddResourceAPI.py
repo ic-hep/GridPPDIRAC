@@ -481,6 +481,70 @@ def _ldap_vo_info(vo_name, host=None):
             ret[se_name].update({'VOPath': norm_path})
     return S_OK(ret)
 
+def checkSRMEndpoint(se, vo, vo_info, srms):
+    ''' Validates BDII info for an SRM and returns VO specific path.
+        Returns (True, path, vo_path, port) on success,
+                (False, None, None, None) on failure.
+        (Errors are also logged to main logging system).
+    '''
+    srmDict = srms.get(se)
+    if not srmDict:
+        gLogger.info("No SRM info for SE %s." % se)
+        return (False, None, None, None)
+
+    version = srmDict.get('GlueServiceVersion', '')
+    if not version.startswith('2'):
+        gLogger.warn("Not SRM version 2 (%s)" % se)
+        return (False, None, None, None)
+
+    url = urlparse(srmDict.get('GlueServiceEndpoint', ''))
+    port = str(url.port)
+    if port is None:
+        gLogger.warn("No port determined for %s" % se)
+        return (False, None, None, None)
+
+    # DIRACs Bdii2CSAgent used the ServiceAccessControlBaseRule value
+    bdiiVOs = set([re.sub('^VO:', '', rule) for rule in
+                   srmDict.get('GlueServiceAccessControlBaseRule', [])
+                   ])
+
+    path = vo_info.get(se, {}).get('Path')
+    if path is None:
+        gLogger.warn("Cannot find 'Path' for vo: %s, se: %s...skipping" % (vo, se))
+        return (False, None, None, None)
+    vo_path = vo_info.get(se, {}).get('VOPath') or os.path.join(path, vo)
+    return (True, path, vo_path, port)
+
+
+def checkROOTEndpoint(se, vo, vo_info, host):
+    ''' Validates BDII info for an XROOTD endpoint and returns VO specific path.
+        Returns (True, path, vo_path, port) on success,
+                (False, None, None, None) on failure.
+        (Errors are also logged to main logging system).
+    '''
+    xroots = [urlparse(i.get('GlueSEAccessProtocolEndpoint', '')).port
+              for i in ldapSEAccessProtocol(se, host=host).get('Value', [])
+              if i.get('GlueSEAccessProtocolType', '').lower().find('root') > -1]
+    if not xroots:
+        gLogger.info("No xrootd info for SE %s." % se)
+        return (False, None, None, None)
+
+    port = None
+    ports = [p for p in xroots if p is not None]
+    if ports:
+        port = 1094 if 1094 in ports else min(ports)
+
+    if port is None:
+        gLogger.warn("No port determined for %s" % se)
+        return (False, None, None, None)
+
+    path = vo_info.get(se, {}).get('Path')
+    if path is None:
+        gLogger.warn("Cannot find 'Path' for vo: %s, se: %s...skipping" % (vo, se))
+        return (False, None, None, None)
+    vo_path = vo_info.get(se, {}).get('VOPath') or os.path.join(path, vo)
+    return (True, path, vo_path, port)
+
 
 def checkUnusedSEs(vo, host=None, banned_ses=None):
     '''
@@ -533,85 +597,43 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
             base_rules = [base_rules]
         bdiiVOs = set([re.sub('^VO:', '', rule) for rule in base_rules])
 
-        srmDict = srms.get(se)
-        if srmDict:
-            version = srmDict.get('GlueServiceVersion', '')
-            if not version.startswith('2'):
-                gLogger.warn("Not SRM version 2")
-                continue
-
-            url = urlparse(srmDict.get('GlueServiceEndpoint', ''))
-            port = str(url.port)
-            if port is None:
-                gLogger.warn("No port determined for %s" % se)
-                continue
-
-            # DIRACs Bdii2CSAgent used the ServiceAccessControlBaseRule value
-            bdiiVOs = set([re.sub('^VO:', '', rule) for rule in
-                           srmDict.get('GlueServiceAccessControlBaseRule', [])
-                           ])
-
-            old_path = gConfig.getValue(cfgPath(accessSection, 'Path'), None)
-            path = vo_info.get(se, {}).get('Path')
-            if path is None:
-                gLogger.warn("Cannot find 'Path' for vo: %s, se: %s...skipping" % (vo, se))
-                continue
-            vo_path = vo_info.get(se, {}).get('VOPath') or os.path.join(path, vo)
-
-            # If path is different from last VO then we just default the
+        hasSRM, SRMPath, SRMVOPath, SRMPort = checkSRMEndpoint(se, vo, vo_info, srms)
+        if hasSRM:
+           # If path is different from last VO then we just default the
             # path to / and use the VOPath dict
-            if old_path and path and path != old_path:
-                path = '/'
-
-            changeSet.add(vopathSection, vo, vo_path)
+            old_path = gConfig.getValue(cfgPath(accessSection, 'Path'), None)
+            if old_path and SRMPath and SRMPath != old_path:
+                SRMPath = '/'
+            changeSet.add(vopathSection, vo, SRMVOPath)
             changeSet.add(accessSection, 'Protocol', 'srm')
             changeSet.add(accessSection, 'PluginName', 'GFAL2_SRM2')
-            changeSet.add(accessSection, 'Port', port)
+            changeSet.add(accessSection, 'Port', SRMPort)
             changeSet.add(accessSection, 'Access', 'remote')
-            changeSet.add(accessSection, 'Path', path)
+            changeSet.add(accessSection, 'Path', SRMPath)
             changeSet.add(accessSection, 'SpaceToken', '')
             changeSet.add(accessSection, 'WSUrl', '/srm/managerv2?SFN=')
             changeSet.add(accessSection, 'Host', se)
+            # Adjust accessSection for ROOT detection below
+            accessSection = cfgPath(seSection, 'AccessProtocol.2')
+            vopathSection = cfgPath(accessSection, 'VOPath')
 
-        xroots = [urlparse(i.get('GlueSEAccessProtocolEndpoint', '')).port
-                  for i in ldapSEAccessProtocol(se, host=host).get('Value', [])
-                  if i.get('GlueSEAccessProtocolType', '').lower().find('root') > -1]
-        if xroots:
-            if srmDict:
-                accessSection = cfgPath(seSection, 'AccessProtocol.2')
-                vopathSection = cfgPath(accessSection, 'VOPath')
-
-            port = None
-            ports = [p for p in xroots if p is not None]
-            if ports:
-                port = 1094 if 1094 in ports else min(ports)
-
-            if port is None:
-                gLogger.warn("No port determined for %s" % se)
-                continue
-
-            old_path = gConfig.getValue(cfgPath(accessSection, 'Path'), None)
-            path = vo_info.get(se, {}).get('Path')
-            if path is None:
-                gLogger.warn("Cannot find 'Path' for vo: %s, se: %s...skipping" % (vo, se))
-                continue
-            vo_path = vo_info.get(se, {}).get('VOPath') or os.path.join(path, vo)
-
-            # If path is different from last VO then we just default the
+        hasROOT, ROOTPath, ROOTVOPath, ROOTPort = checkROOTEndpoint(se, vo, vo_info, host)
+        if hasROOT:
+           # If path is different from last VO then we just default the
             # path to / and use the VOPath dict
-            if old_path and path and path != old_path:
-                path = '/'
-
-            changeSet.add(vopathSection, vo, vo_path)
+            old_path = gConfig.getValue(cfgPath(accessSection, 'Path'), None)
+            if old_path and ROOTPath and ROOTPath != old_path:
+                ROOTPath = '/'
+            changeSet.add(vopathSection, vo, ROOTVOPath)
             changeSet.add(accessSection, 'Protocol', 'root')
             changeSet.add(accessSection, 'PluginName', 'GFAL2_XROOT')
-            changeSet.add(accessSection, 'Port', port)
+            changeSet.add(accessSection, 'Port', ROOTPort)
             changeSet.add(accessSection, 'Access', 'remote')
-            changeSet.add(accessSection, 'Path', path)
+            changeSet.add(accessSection, 'Path', ROOTPath)
             changeSet.add(accessSection, 'SpaceToken', '')
             changeSet.add(accessSection, 'Host', se)
 
-        if not srmDict and not xroots:
+        if not hasSRM and not hasROOT:
             changeSet.add(seSection, 'Host', se)
         changeSet.add(seSection, 'BackendType', backend_type)
         changeSet.add(seSection, 'Description', description)
