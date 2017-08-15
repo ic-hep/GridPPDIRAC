@@ -503,11 +503,6 @@ def checkSRMEndpoint(se, vo, vo_info, srms):
         gLogger.warn("No port determined for %s" % se)
         return (False, None, None, None)
 
-    # DIRACs Bdii2CSAgent used the ServiceAccessControlBaseRule value
-    bdiiVOs = set([re.sub('^VO:', '', rule) for rule in
-                   srmDict.get('GlueServiceAccessControlBaseRule', [])
-                   ])
-
     path = vo_info.get(se, {}).get('Path')
     if path is None:
         gLogger.warn("Cannot find 'Path' for vo: %s, se: %s...skipping" % (vo, se))
@@ -596,6 +591,13 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
         if not isinstance(base_rules, list):
             base_rules = [base_rules]
         bdiiVOs = set([re.sub('^VO:', '', rule) for rule in base_rules])
+        # DIRACs Bdii2CSAgent used the ServiceAccessControlBaseRule value
+        srmDict = srms.get(se)
+        if srmDict:
+            bdiiVOs = set([re.sub('^VO:', '', rule) for rule in
+                           srmDict.get('GlueServiceAccessControlBaseRule', [])
+                           ])
+
 
         hasSRM, SRMPath, SRMVOPath, SRMPort = checkSRMEndpoint(se, vo, vo_info, srms)
         if hasSRM:
