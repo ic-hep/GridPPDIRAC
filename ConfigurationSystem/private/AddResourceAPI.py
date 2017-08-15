@@ -633,7 +633,7 @@ def checkUnusedSEs(vo, host=None, banned_ses=None):
             changeSet.add(accessSection, 'SpaceToken', '')
             changeSet.add(accessSection, 'Host', se)
 
-        if not hasSRM and not hasROOT:
+        if hasSRM or hasROOT:
             changeSet.add(seSection, 'Host', se)
         changeSet.add(seSection, 'BackendType', backend_type)
         changeSet.add(seSection, 'Description', description)
