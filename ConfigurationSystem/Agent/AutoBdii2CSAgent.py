@@ -62,27 +62,29 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
         """
         for vo in self.voName:
             if self.processSEs:
-                ## Checking for unused SEs
-                result = checkUnusedSEs(vo, host=self.bdii_host,
-                                        banned_ses=self.banned_ses)
-                if not result['OK']:
+                try:
+                    ## Checking for unused SEs
+                    update_ses(vo, host=self.bdii_host,
+                               banned_ses=self.banned_ses)
+                except RuntimeError as e:
                     self.log.error("Error while running check for unused SEs "
                                    "in the VO %s: %s"
-                                   % (vo, result['Message']))
+                                   % (vo, e))
                     continue
 
             if self.processCEs:
-                ## Checking for unused CEs
-                result = checkUnusedCEs(vo,
-                                        host=self.bdii_host,
-                                        domain=self.domain,
-                                        country_default=self.country_default,
-                                        banned_ces=self.banned_ces,
-                                        max_processors=self.am_getOption('FixedMaxProcessors', None))
-                if not result['OK']:
+                try:
+                    ## Checking for unused CEs
+                    update_ces(vo,
+                               host=self.bdii_host,
+                               domain=self.domain,
+                               country_default=self.country_default,
+                               banned_ces=self.banned_ces,
+                               max_processors=self.am_getOption('FixedMaxProcessors', None))
+                except RuntimeError as e:
                     self.log.error("Error while running check for unused CEs "
                                    "in the VO %s: %s"
-                                   % (vo, result['Message']))
+                                   % (vo, e))
                     continue
 
         if self.removeOldCEs:
@@ -91,11 +93,6 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
             if not result['OK']:
                 self.log.error("Error while running removal of old CEs: "
                                "%s" % result['Message'])
-
-        # Rebuild the CE & SE lists for the CE
-        result = rebuildSiteLists(domain=self.domain)
-        if not result['OK']:
-            self.log.error("Failed to rebuild site lists: %s" % result['Message'])
 
         # Send notification of old SEs if ail addresses are set
         if self.addressTo and self.addressFrom:
