@@ -1,6 +1,7 @@
 """
 API for adding resources to CS
 """
+from datetime import date, datetime, timedelta
 from urlparse import urlparse
 from AutoResourceTools.utils import get_se_vo_info, get_xrootd_ports
 from AutoResourceTools.ConfigurationSystem import ConfigurationSystem
@@ -12,7 +13,14 @@ from DIRAC.Core.Utilities.Grid import ldapSE, ldapService, getBdiiCEInfo
 
 
 def update_ses(vo, host=None, banned_ses=None):
-    """Update the SEs in the Dirac config for certain VO."""
+    """
+    Update the SEs in the Dirac config for certain VO.
+
+    Args:
+        vo (str): Updating SEs associated with this VO
+        host (str): The BDII host
+        banned_ses (list): List of banned SEs which will be skipped
+    """
 
     # Get SEs from DBII
     ##############################
@@ -62,16 +70,65 @@ def update_ses(vo, host=None, banned_ses=None):
                     vo=vo,
                     vo_info=vo_info.get(se, {}),
                     existing_ses=dirac_ses)
-        except:
+        except Exception:
             gLogger.warn("Skipping problematic SE: %s" % se)
             continue
-        se.write(cfg_system, "/Resources/StorageElements")
+        se.write(cfg_system, '/Resources/StorageElements')
         dirac_ses.add(se.DiracName)
     cfg_system.commit()
 
 
-def update_ces(vo, domain='LCG', country_default='xx', host=None, banned_ces=None, max_processors=None):
-    """Update the CEs in the Dirac config for certain VO."""
+def find_old_ses(notification_threshold=14):
+    """
+    Find old SEs.
+
+    Args:
+        notification_threshold (int): Only SEs which were last seen longer ago than
+                                      this number of days are returned.
+    Returns:
+        list: A sorter list of two element tuples. These elements are as follows:
+              (se name, last seen date). Both elements are strings and the last seen date
+              is in the format '%d/%m/%Y'. This should only contain SEs seen longer ago than
+              notification_threshold
+    """
+    result = ConfigurationSystem().getCurrentCFG()
+    if not result['OK']:
+        gLogger.error('Could not get current config from the CS')
+        raise RuntimeError("Error finding old SEs.")
+
+    old_ses = set()
+    today = date.today()
+    notification_threshold = timedelta(days=notification_threshold)
+    for se, se_info in result['Value'].getAsDict('/Resources/StorageElements').iteritems():
+        if 'LastSeen' not in se_info:
+            gLogger.warn("No LastSeen info for SE: %s" % se)
+            continue
+
+        last_seen_str = se_info['LastSeen']
+        last_seen = datetime.strptime(last_seen_str, '%d/%m/%Y').date()
+        if today - last_seen > notification_threshold:
+            old_ses.add((se, last_seen_str))
+
+    return sorted(old_ses)
+
+
+def update_ces(vo, domain='LCG', country_default='xx', host=None,
+               banned_ces=None, max_processors=None):
+    """
+    Update the CEs in the Dirac config for certain VO.
+
+    Args:
+        vo (str): Updating CEs associated with this VO
+        domain (str): The domain acts as a root directory to the discovered sites as well as
+                      prefixing their Dirac names.
+        country_default (str): Country code for the Dirac site name is auto discovered from the sites
+                               CE host names. If this auto discovery fails the country code defaults
+                               to this value
+        host (str): The BDII host
+        banned_ces (list): List of banned CEs which will be skipped
+        max_processors (str/int): If specified and not None, this overrides the BDII gleaned MaxProcessors
+                                  value for a site which is defined for all CEs.
+    """
 
     # Get CE info from BDII
     ##############################
@@ -85,18 +142,59 @@ def update_ces(vo, domain='LCG', country_default='xx', host=None, banned_ces=Non
     if not ce_bdii_dict:
         gLogger.warn("No CEs found in BDII")
 
-    # Main loop
+    # Main update loop
     ##############################
     cfg_system = ConfigurationSystem()
     for site, site_info in sorted(ce_bdii_dict.iteritems()):
         try:
             s = Site(site, site_info, domain, country_default, banned_ces, max_processors)
-        except:
+        except Exception:
             gLogger.warn("Skipping problematic site: %s" % site)
             continue
-        s.write(cfg_system, cfgPath("/Resources/Sites", domain))
+        s.write(cfg_system, cfgPath('/Resources/Sites', domain))
     cfg_system.commit()
 
+
+def remove_old_ces(removal_threshold=5, domain='LCG', banned_ces=None):
+    """
+    Remove old CEs.
+
+    Args:
+        removal_threshold (int): Only CEs which were last seen longer ago than
+                                      this number of days are removed.
+        domain (str): The domain/root directory under which to search for sites.
+        banned_ces (list): List of banned CEs which will also be removed
+    """
+    cfg_system = ConfigurationSystem()
+    result = cfg_system.getCurrentCFG()
+    if not result['OK']:
+        gLogger.error('Could not get current config from the CS')
+        raise RuntimeError("Error removing old CEs.")
+
+    old_ces = set()
+    today = date.today()
+    base_path = cfgPath('/Resources/Sites', domain)
+    removal_threshold = timedelta(days=removal_threshold)
+    for site, site_info in result['Value'].getAsDict(base_path).iteritems():
+        site_path = cfgPath(base_path, site)
+        for ce, ce_info in site_info.get('CEs', {}).iteritems():
+            ce_path = cfgPath(site_path, 'CEs', ce)
+
+            if 'LastSeen' not in ce_info:
+                gLogger.warn("No LastSeen info for CE: %s at site: %s" % (ce, site))
+                continue
+
+            last_seen = datetime.strptime(ce_info['LastSeen'], '%d/%m/%Y').date()
+            if today - last_seen > removal_threshold\
+               or (banned_ces is not None and ce in banned_ces):
+                cfg_system.remove(section=ce_path)
+                old_ces.add(ce)
+
+        if old_ces:
+            cfg_system.remove(section=site_path, option='CE', value=old_ces)
+    cfg_system.commit()
+
+__all__ = ('update_ses', 'find_old_ses', 'update_ces', 'remove_old_ces')
 
 if __name__ == '__main__':
     from DIRAC.Core.Base import Script
