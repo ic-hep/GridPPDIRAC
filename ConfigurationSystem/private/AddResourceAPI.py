@@ -1,15 +1,13 @@
-"""
-API for adding resources to CS
-"""
+"""API for adding resources to CS."""
 from datetime import date, datetime, timedelta
 from urlparse import urlparse
-from AutoResourceTools.utils import get_se_vo_info, get_xrootd_ports
-from AutoResourceTools.ConfigurationSystem import ConfigurationSystem
-from AutoResourceTools.SETypes import SE
-from AutoResourceTools.CETypes import Site
 from DIRAC import gLogger
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
 from DIRAC.Core.Utilities.Grid import ldapSE, ldapService, getBdiiCEInfo
+from .AutoResourceTools.utils import get_se_vo_info, get_xrootd_ports
+from .AutoResourceTools.ConfigurationSystem import ConfigurationSystem
+from .AutoResourceTools.SETypes import SE
+from .AutoResourceTools.CETypes import Site
 
 
 def update_ses(vo, host=None, banned_ses=None):
@@ -21,7 +19,6 @@ def update_ses(vo, host=None, banned_ses=None):
         host (str): The BDII host
         banned_ses (list): List of banned SEs which will be skipped
     """
-
     # Get SEs from DBII
     ##############################
     result = ldapSE('*', vo=vo, host=host)
@@ -30,7 +27,7 @@ def update_ses(vo, host=None, banned_ses=None):
         raise RuntimeError("ldapSE failure.")
 
     ses = {se: se_info for se, se_info
-           in ((i.get('GlueSEUniqueID', ''), i) for i in result['Value'])
+           in ((i.get('GlueSEUniqueID', ''), i) for i in result['Value'])  # pylint: disable=no-member
            if '.' in se}
     if not ses:
         gLogger.warn("No SEs found in BDII")
@@ -44,7 +41,7 @@ def update_ses(vo, host=None, banned_ses=None):
         raise RuntimeError("ldapService Failure.")
 
     srms = {hostname: endpoint for hostname, endpoint
-            in ((urlparse(i.get('GlueServiceEndpoint', '')).hostname, i) for i in result['Value'])
+            in ((urlparse(i.get('GlueServiceEndpoint', '')).hostname, i) for i in result['Value'])  # pylint: disable=no-member
             if hostname in ses}
 
     # Get dict of SE: VO info paths
@@ -129,7 +126,6 @@ def update_ces(vo, domain='LCG', country_default='xx', host=None,
         max_processors (str/int): If specified and not None, this overrides the BDII gleaned MaxProcessors
                                   value for a site which is defined for all CEs.
     """
-
     # Get CE info from BDII
     ##############################
     result = getBdiiCEInfo(vo, host=host)
@@ -145,7 +141,7 @@ def update_ces(vo, domain='LCG', country_default='xx', host=None,
     # Main update loop
     ##############################
     cfg_system = ConfigurationSystem()
-    for site, site_info in sorted(ce_bdii_dict.iteritems()):
+    for site, site_info in sorted(ce_bdii_dict.iteritems()):  # pylint: disable=no-member
         try:
             s = Site(site, site_info, domain, country_default, banned_ces, max_processors)
         except Exception:

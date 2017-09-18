@@ -1,9 +1,9 @@
-"""Dirac multiVO site types."""
+"""Dirac multi VO site types."""
 import re
 from datetime import date
 from collections import namedtuple
-from .utils import WritableMixin
 from DIRAC import gConfig
+from .utils import WritableMixin
 
 
 class Site(WritableMixin, namedtuple('Site', ('DiracName',
@@ -143,9 +143,9 @@ class Queue(WritableMixin, namedtuple('Queue', ('DiracName',
                 si00 = i.split('=')[-1].strip()
                 break
 
-        # MaxTotalJobs in dirac is (running jobs (i.e. hardware) + waiting jobs)    
+        # MaxTotalJobs in dirac is (running jobs (i.e. hardware) + waiting jobs)
         max_total_jobs_slots = int(queue_info.get('GlueCEInfoTotalCPUs', 0)) or ce_logical_cpus
-        
+
         return super(Queue, cls).__new__(cls,
                                          DiracName=queue,
                                          VO=', '.join(sorted(vo)),

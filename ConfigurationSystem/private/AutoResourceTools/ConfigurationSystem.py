@@ -1,15 +1,15 @@
 """Dirac multiVO Configuration system."""
 from types import GeneratorType
-from DIRAC import gLogger, gConfig, S_OK, S_ERROR
+from DIRAC import gLogger, gConfig
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
 from DIRAC.ConfigurationSystem.Client.CSAPI import CSAPI
 
 
 class ConfigurationSystem(CSAPI):
-    """ Class to smartly wrap the functionality of the CS"""
+    """Class to smartly wrap the functionality of the CS."""
 
     def __init__(self):
-        """initialise"""
+        """initialise."""
         CSAPI.__init__(self)
         self._num_changes = 0
         result = self.initialize()
@@ -52,23 +52,6 @@ class ConfigurationSystem(CSAPI):
             self.modifyValue(cfgPath(section, option), new_value)
         self._num_changes += 1
 
-    def append_unique(self, section, option, new_value):
-        """
-        Append a value onto the end of an existing CS option.
-
-        This method is like append except that it ensures that the final list
-        of values for the given option only contains unique entries.
-        """
-#        old_values = set(v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v)
-        old_values = (v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(','))
-        new_values = set(v for v in old_values if v)
-
-        if isinstance(new_value, (tuple, list, set, GeneratorType)):
-            new_values.update(map(str, new_value))
-        else:
-            new_values.add(str(new_value))
-        self.add(section, option, new_values)
-
     def append(self, section, option, new_value):
         """
         Append a value onto the end of an existing CS option.
@@ -76,6 +59,11 @@ class ConfigurationSystem(CSAPI):
         This method is like add with the exception that the new value
         is appended on to the end of the list of values associated
         with that option.
+
+        Args:
+            section (str): The section
+            option (str): The option to be modified
+            new_value: The value to be appended
         """
 #        old_values = [v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v]
         old_values = (v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(','))
@@ -85,6 +73,28 @@ class ConfigurationSystem(CSAPI):
             new_values.extend(new_value)
         else:
             new_values.append(new_value)
+        self.add(section, option, new_values)
+
+    def append_unique(self, section, option, new_value):
+        """
+        Append a value onto the end of an existing CS option.
+
+        This method is like append except that it ensures that the final list
+        of values for the given option only contains unique entries.
+
+        Args:
+            section (str): The section
+            option (str): The option to be modified
+            new_value: The value to be appended
+        """
+#        old_values = set(v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v)
+        old_values = (v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(','))
+        new_values = set(v for v in old_values if v)
+
+        if isinstance(new_value, (tuple, list, set, GeneratorType)):
+            new_values.update(map(str, new_value))
+        else:
+            new_values.add(str(new_value))
         self.add(section, option, new_values)
 
     def remove(self, section, option=None, value=None):
@@ -123,22 +133,16 @@ class ConfigurationSystem(CSAPI):
             self.add(section, option, new_values)
 
     def commit(self):
-        """
-        Commit the changes to the configuration system.
-
-        Returns:
-            dict: S_OK/S_ERROR DIRAC style dicts
-        """
+        """Commit the changes to the configuration system."""
         result = CSAPI.commit(self)
         if not result['OK']:
             gLogger.error("Error while commit to CS", result['Message'])
-            return S_ERROR("Error while commit to CS")
+            raise RuntimeError("Error while commit to CS")
         if self._num_changes:
             gLogger.notice("Successfully committed %d changes to CS\n"
                            % self._num_changes)
             self._num_changes = 0
-            return S_OK()
-        gLogger.notice("No changes to commit")
-        return S_OK()
+        else:
+            gLogger.notice("No changes to commit")
 
 __all__ = ('ConfigurationSystem',)

@@ -1,15 +1,16 @@
-"""Dirac multiVO Storage element types."""
+"""Dirac multi VO Storage element types."""
 import os
 import re
 from datetime import date
 from collections import namedtuple
 from urlparse import urlparse
-from .utils import WritableMixin  # , splitcommonvopaths
 from DIRAC import gLogger
+from .utils import WritableMixin  # , splitcommonvopaths
 
 
 class SkipAccessProtocolError(RuntimeError):
     """Error signalling access protocol should be skipped."""
+
     pass
 
 
@@ -158,7 +159,7 @@ class SE(WritableMixin, namedtuple('SE', ('DiracName',
             else se_info.get('GlueSAAccessControlBaseRule', [])
         if not isinstance(base_rules, (list, tuple)):
             base_rules = [base_rules]
-    
+
         bdii_vos = set(re.sub('^VO:', '', rule) for rule in base_rules)
 
         aps = []

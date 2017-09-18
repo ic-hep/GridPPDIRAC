@@ -1,8 +1,7 @@
-#############################################################################
-# $HeadURL$
-#############################################################################
-
+# pylint: disable=attribute-defined-outside-init, broad-except
 """
+Automatic BDII -> DIRAC CS Agent.
+
 The AutoBdii2CSAgent checks the BDII for availability of CE and SE
 resources for a given or any configured VO. It detects resources not yet
 present in the CS and adds them automatically based of configurable
@@ -10,9 +9,6 @@ default parameters.
 For the CEs and SEs already present in the CS, the agent is updating
 if necessary settings which were changed in the BDII recently
 """
-
-__RCSID__ = "$Id$"
-
 from datetime import datetime, date, timedelta
 from textwrap import dedent
 
@@ -29,14 +25,18 @@ from GridPPDIRAC.ConfigurationSystem.private.AddResourceAPI import (update_ces,
 
 class AutoBdii2CSAgent(Bdii2CSAgent):
     """
-    AutoBdii2CSAgent will update the CS automatically for CEs and
-    SEs.
+    AutoBdii2CSAgent.
+
+    Automatically updates the CS automatically for CEs and SEs.
     """
+
     domain = 'LCG'
     country_default = 'xx'
 
     def initialize(self):
         """
+        Initialize.
+
         Initialise method pulls in some extra configuration options
         These include:
         domain            - The Grid domain used to generate
@@ -58,10 +58,7 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
         return Bdii2CSAgent.initialize(self)
 
     def execute(self):
-        """
-        General agent execution method
-        """
-
+        """General agent execution method."""
         # VO loop
         ##############################
         for vo in self.voName:
@@ -71,10 +68,10 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
                 try:
                     # Update SEs returning those last seen > notification_threshold
                     update_ses(vo=vo, host=self.bdii_host, banned_ses=self.banned_ses)
-                except Exception as e:
+                except Exception as err:
                     self.log.error("Error while running check for unused SEs "
                                    "in the VO %s: %s"
-                                   % (vo, e))
+                                   % (vo, err))
                     continue
 
             # Update CEs
@@ -87,10 +84,10 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
                                country_default=self.country_default,
                                banned_ces=self.banned_ces,
                                max_processors=self.am_getOption('FixedMaxProcessors', None))
-                except Exception as e:
+                except Exception as err:
                     self.log.error("Error while running check for unused CEs "
                                    "in the VO %s: %s"
-                                   % (vo, e))
+                                   % (vo, err))
                     continue
 
         # Remove old CEs with last_seen > threshold
@@ -100,16 +97,16 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
                 remove_old_ces(removal_threshold=self.ce_removal_threshold,
                                domain=self.domain,
                                banned_ces=self.banned_ces)
-            except Exception as e:
-                self.log.error("Error while running removal of old CEs: %s" % e)
+            except Exception as err:
+                self.log.error("Error while running removal of old CEs: %s" % err)
 
         # Email about old SEs with last_seen > threshold
         ##############################
         if self.addressTo and self.addressFrom:
             try:
                 old_ses = find_old_ses(notification_threshold=14)
-            except Exception as e:
-                self.log.error("Failed to get old SEs: %s" % e)
+            except Exception as err:
+                self.log.error("Failed to get old SEs: %s" % err)
                 return S_OK()
 
             if not old_ses:

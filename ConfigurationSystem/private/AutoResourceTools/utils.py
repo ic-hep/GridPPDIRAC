@@ -18,7 +18,14 @@ class WritableMixin(object):
     __slots__ = ()
 
     def write(self, cfg_system, path_root):
-        """Write out config."""
+        """
+        Write out config.
+
+        Args:
+            cfg_system (ConfigurationSystem): The ConfigurationSystem object that will handle
+                                              the writing to the DIRAC CS.
+            path_root (str): The path in the DIRAC CS to write options to.
+        """
         path = cfgPath(path_root, self.DiracName)
 
         for option, value in self._replace(DiracName=None)._asdict().iteritems():
@@ -39,10 +46,13 @@ class WritableMixin(object):
 
 def splitcommonvopaths(vo_paths):
     """
-    Return the common root between a list of paths along with the list of paths
-    trimmed to be relative to the root.
+    Split VO paths.
 
-    Note: There is a builtin function os.path.commonpath in Python > 3.5
+    Return the common root between different VO paths along with the dict of VO name
+    to VO path trimmed to be relative to the root.
+
+    Note: There is a builtin function os.path.commonpath in Python > 3.5 which
+          can get the root part.
 
     Args:
         vo_paths (dict): Dictionary of vo name to vo path from which to find the root
@@ -58,7 +68,16 @@ def splitcommonvopaths(vo_paths):
 
 
 def get_xrootd_ports(se, host):
-    """Get DBII XRootD ports."""
+    """
+    Get DBII XRootD ports.
+
+    Args:
+        se (str): The SE to get XRootD ports for.
+        host (str): The BDII host.
+
+    Returns:
+        set: The XRootD ports defined in the BDII
+    """
     result = ldapSEAccessProtocol(se, host=host)
     return set(port for protocol_type, port
                in ((i.get('GlueSEAccessProtocolType', '').lower(),
@@ -67,7 +86,16 @@ def get_xrootd_ports(se, host):
 
 
 def get_se_vo_info(vo_name, host=None):
-    """function for getting dict of SE: VO info path."""
+    """
+    function for getting dict of SE: VO info path.
+
+    Args:
+        vo_name (str): The VO that we want the mapping for.
+        host (str): The BDII host.
+
+    Returns:
+        dict: A mapping of SE name to VO Paths.
+    """
     vo_filter = '(GlueVOInfoAccessControlBaseRule=VOMS:/%s/*)' % vo_name
     vo_filter += '(GlueVOInfoAccessControlBaseRule=VOMS:/%s)' % vo_name
     vo_filter += '(GlueVOInfoAccessControlBaseRule=VO:%s)' % vo_name
