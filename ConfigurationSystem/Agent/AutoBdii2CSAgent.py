@@ -23,6 +23,9 @@ from GridPPDIRAC.ConfigurationSystem.private.AddResourceAPI import (update_ces,
                                                                     find_old_ses)
 
 
+__RCSID__ = "$Id$"
+
+
 class AutoBdii2CSAgent(Bdii2CSAgent):
     """
     AutoBdii2CSAgent.
