@@ -1,726 +1,199 @@
-# $HeadURL$
-"""
-API for adding resources to CS
-"""
-import os
-import re
-from functools import partial
-from datetime import datetime, date, timedelta
-from types import GeneratorType
+"""API for adding resources to CS."""
+from datetime import date, datetime, timedelta
 from urlparse import urlparse
-from DIRAC import gLogger, gConfig, S_OK, S_ERROR
-from DIRAC.ConfigurationSystem.Client.CSAPI import CSAPI
+from DIRAC import gLogger
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
-from DIRAC.Core.Utilities.Grid import (getBdiiCEInfo, ldapSE, ldapSEAccessProtocol,
-                                       ldapService, ldapsearchBDII)
+from DIRAC.Core.Utilities.Grid import ldapSE, ldapService, getBdiiCEInfo
+from .AutoResourceTools.utils import get_se_vo_info, get_xrootd_ports
+from .AutoResourceTools.ConfigurationSystem import ConfigurationSystem
+from .AutoResourceTools.SETypes import SE
+from .AutoResourceTools.CETypes import Site
 
 
-__all__ = ['checkUnusedCEs', 'checkUnusedSEs', 'removeOldCEs']
+def update_ses(vo, host=None, banned_ses=None):
+    """
+    Update the SEs in the Dirac config for certain VO.
 
-special_cc_flags = re.IGNORECASE
-special_cc_mappings = [partial(re.compile(r'\.gov$', special_cc_flags).sub, repl='.us'),
-                       partial(re.compile(r'\.edu$', special_cc_flags).sub, repl='.us'),
-                       partial(re.compile(r'efda\.org$', special_cc_flags).sub, repl='efda.uk'),
-                       partial(re.compile(r'atlas-swt2\.org$', special_cc_flags).sub, repl='atlas-swt2.us')
-                       ]
-
-class _ConfigurationSystem(CSAPI):
-    """ Class to smartly wrap the functionality of the CS"""
-
-    def __init__(self):
-        """initialise"""
-        CSAPI.__init__(self)
-        self._num_changes = 0
-        result = self.initialize()
-        if not result['OK']:
-            gLogger.error('Failed to initialise CSAPI object',
-                          result['Message'])
-            raise RuntimeError(result['Message'])
-
-    def add(self, section, option, new_value):
-        """
-        Add a value into the configuration system.
-
-        This method will overwrite any existing option's value.
-
-        Args:
-            section (str): The section
-            option (str): The option to be created/modified
-            new_value: The value to be assigned
-
-        Example:
-            >>> cs = _ConfigurationSystem()
-            >>> cs.add('/Registry', 'DefaultGroup', 'dteam_user')
-        """
-        if isinstance(new_value, (tuple, list, set, GeneratorType)):
-            new_value = ', '.join(sorted(map(str, new_value)))
-        else:
-            new_value = str(new_value)
-
-        old_value = gConfig.getValue(cfgPath(section, option), None)
-        if old_value == new_value:
-            return
-
-        if old_value is None:
-            gLogger.notice("Setting %s/%s:   -> %s"
-                           % (section, option, new_value))
-            self.setOption(cfgPath(section, option), new_value)
-        else:
-            gLogger.notice("Modifying %s/%s:   %s -> %s"
-                           % (section, option, old_value, new_value))
-            self.modifyValue(cfgPath(section, option), new_value)
-        self._num_changes += 1
-
-    def append_unique(self, section, option, new_value):
-        """
-        Append a value onto the end of an existing CS option.
-
-        This method is like append except that it ensures that the final list
-        of values for the given option only contains unique entries.
-        """
-#        old_values = set(v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v)
-        old_values = (v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(','))
-        new_values = set(v for v in old_values if v)
-
-        if isinstance(new_value, (tuple, list, set, GeneratorType)):
-            new_values.update(map(str, new_value))
-        else:
-            new_values.add(str(new_value))
-        self.add(section, option, new_values)
-
-    def append(self, section, option, new_value):
-        """
-        Append a value onto the end of an existing CS option.
-
-        This method is like add with the exception that the new value
-        is appended on to the end of the list of values associated
-        with that option.
-        """
-#        old_values = [v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v]
-        old_values = (v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(','))
-        new_values = [v for v in old_values if v]
-
-        if isinstance(new_value, (tuple, list, set, GeneratorType)):
-            new_values.extend(new_value)
-        else:
-            new_values.append(new_value)
-        self.add(section, option, new_values)
-
-    def remove(self, section, option=None, value=None):
-        """
-        Remove a section/option from the configuration system.
-
-        This method will remove the specified section if the option argument
-        is None (default). If the option argument is given but value is None
-        then that option (formed of section/option) is removed. If both option
-        and value are given then that value is removed from the comma seperated
-        values associated with that option.
-
-        Args:
-            section (str): The section
-            option (str): [optional] The option
-
-        Example:
-            >>> _ConfigurationSystem().remove('/Registry', 'DefaultGroup')
-        """
-        if option is None:
-            gLogger.notice("Removing section %s" % section)
-            self.delSection(section)
-            self._num_changes += 1
-        elif value is None:
-            gLogger.notice("Removing option %s/%s" % (section, option))
-            self.delOption(cfgPath(section, option))
-            self._num_changes += 1
-        else:
-            if isinstance(value, str):
-                value = [value]
-            gLogger.notice("Removing value(s) %s from option %s/%s"
-                           % (list(value), section, option))
-            old_values = (v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(','))
-            new_values = [v for v in old_values if v and v not in value]
-            self.add(section, option, new_values)
-
-    def commit(self):
-        """
-        Commit the changes to the configuration system.
-
-        Returns:
-            dict: S_OK/S_ERROR DIRAC style dicts
-        """
-        result = CSAPI.commit(self)
-        if not result['OK']:
-            gLogger.error("Error while commit to CS", result['Message'])
-            return S_ERROR("Error while commit to CS")
-        if self._num_changes:
-            gLogger.notice("Successfully committed %d changes to CS\n"
-                           % self._num_changes)
-            self._num_changes = 0
-            return S_OK()
-        gLogger.notice("No changes to commit")
-        return S_OK()
-
-
-def removeOldCEs(threshold=5, domain='LCG', banned_ces=None):
-    '''
-    Remove CEs that have not been seen for a given time
-    '''
-    if banned_ces is None:
-        banned_ces = []
-
-    cs = _ConfigurationSystem()
-    result = cs.getCurrentCFG()
+    Args:
+        vo (str): Updating SEs associated with this VO
+        host (str): The BDII host
+        banned_ses (list): List of banned SEs which will be skipped
+    """
+    # Get SEs from DBII
+    ##############################
+    result = ldapSE('*', vo=vo, host=host)
     if not result['OK']:
-        gLogger.error('Could not get current sites from the CS')
-        return result
+        gLogger.error("Failed to call ldapSE('*', vo=%s, host=%s): %s" % (vo, host, result['Message']))
+        raise RuntimeError("ldapSE failure.")
+
+    ses = {se: se_info for se, se_info
+           in ((i.get('GlueSEUniqueID', ''), i) for i in result['Value'])  # pylint: disable=no-member
+           if '.' in se}
+    if not ses:
+        gLogger.warn("No SEs found in BDII")
+
+    # Get dict of storage SRMs: endpoints
+    ##############################
+    result = ldapService(serviceType='SRM', vo=vo, host=host)
+    if not result['OK']:
+        gLogger.error("Failed to call ldapService(serviceType='SRM', vo=%s, host=%s): %s"
+                      % (vo, host, result['Message']))
+        raise RuntimeError("ldapService Failure.")
+
+    srms = {hostname: endpoint for hostname, endpoint
+            in ((urlparse(i.get('GlueServiceEndpoint', '')).hostname, i) for i in result['Value'])  # pylint: disable=no-member
+            if hostname in ses}
+
+    # Get dict of SE: VO info paths
+    ##############################
+    vo_info = get_se_vo_info(vo, host=host)
+    if not vo_info:
+        gLogger.warn("No SE -> VO info path mapping for any SE.")
+
+    # Main loop
+    ##############################
+    dirac_ses = set()
+    cfg_system = ConfigurationSystem()
+    for se, se_info in sorted(ses.iteritems()):
+        if banned_ses is not None and se in banned_ses:
+            gLogger.info("Skipping banned SE: %s" % se)
+            continue
+
+        try:
+            se = SE(se=se,
+                    se_info=se_info,
+                    srms=srms,
+                    xrootd_ports=get_xrootd_ports(se, host),
+                    vo=vo,
+                    vo_info=vo_info.get(se, {}),
+                    existing_ses=dirac_ses)
+        except Exception:
+            gLogger.warn("Skipping problematic SE: %s" % se)
+            continue
+        se.write(cfg_system, '/Resources/StorageElements')
+        dirac_ses.add(se.DiracName)
+    cfg_system.commit()
+
+
+def find_old_ses(notification_threshold=14):
+    """
+    Find old SEs.
+
+    Args:
+        notification_threshold (int): Only SEs which were last seen longer ago than
+                                      this number of days are returned.
+    Returns:
+        list: A sorter list of two element tuples. These elements are as follows:
+              (se name, last seen date). Both elements are strings and the last seen date
+              is in the format '%d/%m/%Y'. This should only contain SEs seen longer ago than
+              notification_threshold
+    """
+    result = ConfigurationSystem().getCurrentCFG()
+    if not result['OK']:
+        gLogger.error('Could not get current config from the CS')
+        raise RuntimeError("Error finding old SEs.")
+
+    old_ses = set()
+    today = date.today()
+    notification_threshold = timedelta(days=notification_threshold)
+    for se, se_info in result['Value'].getAsDict('/Resources/StorageElements').iteritems():
+        if 'LastSeen' not in se_info:
+            gLogger.warn("No LastSeen info for SE: %s" % se)
+            continue
+
+        last_seen_str = se_info['LastSeen']
+        last_seen = datetime.strptime(last_seen_str, '%d/%m/%Y').date()
+        if today - last_seen > notification_threshold:
+            old_ses.add((se, last_seen_str))
+
+    return sorted(old_ses)
+
+
+def update_ces(vo, domain='LCG', country_default='xx', host=None,
+               banned_ces=None, max_processors=None):
+    """
+    Update the CEs in the Dirac config for certain VO.
+
+    Args:
+        vo (str): Updating CEs associated with this VO
+        domain (str): The domain acts as a root directory to the discovered sites as well as
+                      prefixing their Dirac names.
+        country_default (str): Country code for the Dirac site name is auto discovered from the sites
+                               CE host names. If this auto discovery fails the country code defaults
+                               to this value
+        host (str): The BDII host
+        banned_ces (list): List of banned CEs which will be skipped
+        max_processors (str/int): If specified and not None, this overrides the BDII gleaned MaxProcessors
+                                  value for a site which is defined for all CEs.
+    """
+    # Get CE info from BDII
+    ##############################
+    result = getBdiiCEInfo(vo, host=host)
+    if not result['OK']:
+        gLogger.error("Failed to call getBdiiCEInfo(vo=%s, host=%s): %s" % (vo, host, result['Message']))
+        raise RuntimeError("getBdiiCEInfo failure.")
+
+    ce_bdii_dict = result['Value']
+
+    if not ce_bdii_dict:
+        gLogger.warn("No CEs found in BDII")
+
+    # Main update loop
+    ##############################
+    cfg_system = ConfigurationSystem()
+    for site, site_info in sorted(ce_bdii_dict.iteritems()):  # pylint: disable=no-member
+        try:
+            s = Site(site, site_info, domain, country_default, banned_ces, max_processors)
+        except Exception:
+            gLogger.warn("Skipping problematic site: %s" % site)
+            continue
+        s.write(cfg_system, cfgPath('/Resources/Sites', domain))
+    cfg_system.commit()
+
+
+def remove_old_ces(removal_threshold=5, domain='LCG', banned_ces=None):
+    """
+    Remove old CEs.
+
+    Args:
+        removal_threshold (int): Only CEs which were last seen longer ago than
+                                      this number of days are removed.
+        domain (str): The domain/root directory under which to search for sites.
+        banned_ces (list): List of banned CEs which will also be removed
+    """
+    cfg_system = ConfigurationSystem()
+    result = cfg_system.getCurrentCFG()
+    if not result['OK']:
+        gLogger.error('Could not get current config from the CS')
+        raise RuntimeError("Error removing old CEs.")
+
+    old_ces = set()
+    today = date.today()
     base_path = cfgPath('/Resources/Sites', domain)
-    site_dict = result['Value'].getAsDict(base_path)
-    removed_ces = set()
-    for site, site_info in site_dict.iteritems():
+    removal_threshold = timedelta(days=removal_threshold)
+    for site, site_info in result['Value'].getAsDict(base_path).iteritems():
         site_path = cfgPath(base_path, site)
         for ce, ce_info in site_info.get('CEs', {}).iteritems():
             ce_path = cfgPath(site_path, 'CEs', ce)
+
             if 'LastSeen' not in ce_info:
-                gLogger.debug("No LastSeen info for CE: %s at site: %s" % (ce, site))
+                gLogger.warn("No LastSeen info for CE: %s at site: %s" % (ce, site))
                 continue
+
             last_seen = datetime.strptime(ce_info['LastSeen'], '%d/%m/%Y').date()
-            if date.today() - last_seen > timedelta(days=threshold) \
-                    or ce in banned_ces:
-                cs.remove(section=ce_path)
-                removed_ces.add(ce)
-        if removed_ces:
-            cs.remove(section=site_path, option='CE', value=removed_ces)
-    return cs.commit()
+            if today - last_seen > removal_threshold\
+               or (banned_ces is not None and ce in banned_ces):
+                cfg_system.remove(section=ce_path)
+                old_ces.add(ce)
 
+        if old_ces:
+            cfg_system.remove(section=site_path, option='CE', value=old_ces)
+    cfg_system.commit()
 
-def findOldSEs(threshold=14):
-    '''
-    Sends an e-mail listing any old SEs which should probably be removed.
-    Considers SEs older than threshold.
-    '''
-    old_ses = set()
-
-    cs = _ConfigurationSystem()
-    result = cs.getCurrentCFG()
-    if not result['OK']:
-        gLogger.error('Could not get current SEs from the CS')
-        return result
-    base_path = '/Resources/StorageElements'
-    se_dict = result['Value'].getAsDict(base_path)
-    for se, se_info in se_dict.iteritems():
-        if 'LastSeen' not in se_info:
-            # No date for this SE... It was manually added -> ignore it
-            continue
-        last_seen_str = se_info['LastSeen']
-        last_seen = datetime.strptime(last_seen_str, '%d/%m/%Y').date()
-        if date.today() - last_seen > timedelta(days=threshold):
-            old_ses.add( (se, last_seen_str) )
-
-    retval = sorted(list(old_ses))
-    return S_OK(retval)
-
-
-def checkUnusedCEs(vo, host=None, domain='LCG',
-                   country_default='xx', banned_ces=None, max_processors=None):
-    '''
-    Check for unused CEs and add them where possible
-
-    vo                - The VO
-    domain            - The Grid domain used to generate
-                        the DIRAC site name e.g. LCG
-    country_default   - the default country code to use to substitute into
-                        the dirac site name
-    '''
-    if banned_ces is None:
-        banned_ces = []
-
-    result = getBdiiCEInfo(vo, host=host)
-    if not result['OK']:
-        gLogger.error("Problem getting BDII info")
-        return result
-    ceBdiiDict = result['Value']
-
-    # get current list of SEs
-    result = gConfig.getSections('/Resources/StorageElements')
-    current_ses = set()
-    if result['OK']:
-        current_ses.update(result['Value'])
-    else:
-        gLogger.warn("Couldn't get current CS list of SEs")
-
-    # now add the new resources
-    cfgBase = "/Resources/Sites/%s" % domain
-    changeSet = _ConfigurationSystem()
-    for site, site_info in sorted(ceBdiiDict.iteritems()):
-        diracSite = '.'.join((domain, site))
-
-        for ce in site_info.get('CEs', {}).iterkeys():
-            for m in special_cc_mappings:
-                ce = m(string=ce.strip())
-            countryCode = ce.split('.')[-1].strip()
-            if len(countryCode) == 2:
-                diracSite = '.'.join((diracSite, countryCode))
-                break
-        else:
-            diracSite = '.'.join((diracSite, country_default))
-
-        if diracSite is None:
-            gLogger.warn("Couldn't form a valid DIRAC name for site %s" % site)
-            continue
-
-        sitePath = cfgPath(cfgBase, diracSite)
-
-        name = site_info.get('GlueSiteName').strip()
-        description = site_info.get('GlueSiteDescription').strip()
-        latitude = site_info.get('GlueSiteLatitude').strip()
-        longitude = site_info.get('GlueSiteLongitude').strip()
-        mail = site_info.get('GlueSiteSysAdminContact')\
-                        .replace('mailto:', '')\
-                        .strip()
-
-        for ce, ce_info in sorted(site_info.get('CEs', {}).iteritems()):
-            if ce in banned_ces:
-                continue
-            ce_path = cfgPath(sitePath, 'CEs', ce)
-
-            arch = ce_info.get('GlueHostArchitecturePlatformType', '')
-            num_cores = int(max_processors or ce_info.get('GlueHostArchitectureSMPSize', 1))
-            si00 = ce_info.get('GlueHostBenchmarkSI00', '')
-            ram = ce_info.get('GlueHostMainMemoryRAMSize', '')
-            os_name = ce_info.get('GlueHostOperatingSystemName', '')
-            os_version = ce_info.get('GlueHostOperatingSystemVersion', '')
-            os_release = ce_info.get('GlueHostOperatingSystemRelease', '')
-
-            for queue, queue_info in sorted(ce_info.get('Queues', {}).iteritems()):
-                queue_path = cfgPath(ce_path, 'Queues', queue)
-
-                ce_type = queue_info.get('GlueCEImplementationName', '')
-                max_cpu_time = queue_info.get('GlueCEPolicyMaxCPUTime')
-                if max_cpu_time == "0":
-                  # bug on arc, hard code to 2 days
-                  max_cpu_time = "2880"
-                if max_cpu_time == "2147483647":
-                  # Batch system integration is broken at site
-                  max_cpu_time = "2880"
-                if max_cpu_time is None:
-                    max_cpu_time = '0'
-
-                vos = set()
-                if queue_info.get('GlueCEStateStatus', '').lower() == 'production':
-                    acbr = queue_info.get('GlueCEAccessControlBaseRule')
-                    if not isinstance(acbr, (list, tuple, set)):
-                        acbr = [acbr]
-                    vos = set((rule.replace('VO:', '') for rule in acbr
-                               if rule.startswith('VO:')))
-                q_si00 = ''
-                capability = queue_info.get('GlueCECapability', [])
-                if isinstance(capability, basestring):
-                    capability = [capability]
-                for i in capability:
-                    if 'CPUScalingReferenceSI00' in i:
-                        q_si00 = i.split('=')[-1].strip()
-                        break
-                # MaxTotalJobs in dirac is (running jobs (i.e. hardware) + waiting jobs)    
-                max_total_jobs_slots = int(queue_info.get('GlueCEInfoTotalCPUs', 0)) or \
-                                 int(ce_info.get('GlueSubClusterLogicalCPUs', 0))
-                max_waiting_jobs = 2 * max_total_jobs_slots
-                max_total_jobs = max_waiting_jobs + 2 * max_total_jobs_slots
-
-                changeSet.add(queue_path, 'VO', vos)
-                changeSet.add(queue_path, 'SI00', q_si00)
-                changeSet.add(queue_path, 'maxCPUTime', max_cpu_time)
-                changeSet.add(queue_path, 'MaxTotalJobs', max_total_jobs)
-                changeSet.add(queue_path, 'MaxWaitingJobs', max_waiting_jobs)
-
-            # The CEType needs to be "ARC" but the BDII contains "ARC-CE"
-            if ce_type == 'ARC-CE':
-                ce_type = 'ARC'
-
-            if num_cores > 1:
-                changeSet.add(ce_path, 'MaxProcessors', num_cores)
-            changeSet.add(ce_path, 'LastSeen', date.today().strftime('%d/%m/%Y'))
-            changeSet.add(ce_path, 'architecture', arch)
-            changeSet.add(ce_path, 'SI00', si00)
-            changeSet.add(ce_path, 'HostRAM', ram)
-            changeSet.add(ce_path, 'CEType', ce_type)
-            changeSet.add(ce_path, 'OS', 'EL%s'
-                          % os_release.split('.')[0].strip())
-            if 'ARC' in ce_type:
-                changeSet.add(ce_path, 'SubmissionMode', 'Direct')
-                changeSet.add(ce_path, 'JobListFile', '%s-jobs.xml' % ce)
-            elif 'CREAM' in ce_type:
-                changeSet.add(ce_path, 'SubmissionMode', 'Direct')
-
-        changeSet.add(sitePath, 'Name', name)
-        changeSet.add(sitePath, 'Description', description)
-        changeSet.add(sitePath, 'Coordinates', '%s:%s' % (longitude, latitude))
-        changeSet.add(sitePath, 'Mail', mail)
-    return changeSet.commit()
-
-
-def rebuildSiteLists(domain='LCG'):
-    ''' Rebuilds the CE & SE lists for all of the sites in the CS. '''
-
-    # Prefetch the full list of SEs
-    result = gConfig.getSections('/Resources/StorageElements')
-    current_ses = set()
-    if result['OK']:
-        current_ses.update(result['Value'])
-    else:
-        return S_ERROR("Couldn't get current CS list of SEs")
-    
-    cfgBase = "/Resources/Sites/%s" % domain
-    sites = set()
-    result = gConfig.getSections(cfgBase)
-    sites = set()
-    if result['OK']:
-        sites.update(result['Value'])
-    else:
-        return S_ERROR("Couldn't get current CS list of sites")
-
-    changeSet = _ConfigurationSystem()
-    for site in sites:
-        site_base_name = site.split(".")[1]
-        sitePath = "%s/%s" % (cfgBase, site)
-        
-        # Get the CEs
-        site_ces = set()
-        CEsPath = "%s/CEs" % sitePath
-        result = gConfig.getSections(CEsPath)
-        if result['OK']:
-            site_ces.update(result['Value'])
-        else:
-            gLogger.warn("Failed to get CEs for site %s." % site)
-  
-        # Get the SEs
-        site_ses = set(se for se in current_ses if se.startswith(site_base_name))
-
-        changeSet.add(sitePath, 'CE', sorted(list(site_ces)))
-        changeSet.add(sitePath, 'SE', sorted(list(site_ses)))
-
-    return changeSet.commit()
-
-
-class SiteNamingDict(dict):
-    '''Dict for site names'''
-
-    _latency_mapping = {'online': 'disk',
-                        'nearline': 'tape'}
-    def __init__(self, cfgBase):
-        super(SiteNamingDict, self).__init__()
-        result = gConfig.getSections(cfgBase)
-        if not result['OK']:
-            raise Exception("Couldn't get current CS list of SEs")
-
-        for s in result['Value']:
-            r = gConfig.getOptionsDict(cfgPath(cfgBase, s, 'AccessProtocol.1'))
-            if not r['OK'] or 'Host' not in r['Value']:
-                r = gConfig.getOptionsDict(cfgPath(cfgBase, s))
-                if not r['OK'] or 'Host' not in r['Value']:
-                    continue
-            self[r['Value']['Host']] = s
-
-    def nextValidName(self, pattern, latency):
-        '''Return next valid DIRAC id from CN'''
-        count = -1
-        extension = SiteNamingDict._latency_mapping.get(latency.lower(), 'disk')
-        r = re.compile('%s(?P<se_index>[0-9]*?)-%s'
-                       % (pattern, extension))
-        # faster implementation than max
-        for u in self.itervalues():
-            match = r.match(u)
-            if match:
-                # or 0 catches the case with no numbers
-                m = int(match.group('se_index') or 0)
-                if m > count:
-                    count = m
-        if count == -1:
-            return pattern + '-%s' % extension
-        return pattern + str(count + 1) + '-%s' % extension
-
-
-def _ldap_vo_info(vo_name, host=None):
-    '''function for getting VO SE path info'''
-    vo_filter = '(GlueVOInfoAccessControlBaseRule=VOMS:/%s/*)' % vo_name
-    vo_filter += '(GlueVOInfoAccessControlBaseRule=VOMS:/%s)' % vo_name
-    vo_filter += '(GlueVOInfoAccessControlBaseRule=VO:%s)' % vo_name
-    vo_filter += '(GlueVOInfoAccessControlBaseRule=%s)' % vo_name
-    vo_filter += '(GlueVOInfoAccessControlRule=VOMS:/%s/*)' % vo_name
-    vo_filter += '(GlueVOInfoAccessControlRule=VOMS:/%s)' % vo_name
-    vo_filter += '(GlueVOInfoAccessControlRule=VO:%s)' % vo_name
-    vo_filter += '(GlueVOInfoAccessControlRule=%s)' % vo_name
-    filt = '(&(objectClass=GlueVOInfo)(|%s))' % vo_filter
-    result = ldapsearchBDII(filt=filt, host=host)
-    if not result['OK']:
-        return result
-
-    paths_mapping = {}
-    for se_info in result['Value']:
-        if 'attr' not in se_info:
-            continue
-        if 'GlueChunkKey' not in se_info['attr']:
-            continue
-        for elem in se_info['attr']['GlueChunkKey']:
-            if 'GlueSEUniqueID=' in elem:
-                paths_mapping.setdefault(elem.replace('GlueSEUniqueID=', ''),
-                                         set())\
-                             .add(se_info['attr']['GlueVOInfoPath'])
-
-    ret = {}
-    for se_name, vo_info_paths in paths_mapping.iteritems():
-        sorted_paths = sorted(vo_info_paths, key=len)
-        len_orig = len(vo_info_paths)
-        len_unique = len(set((len(path) for path in vo_info_paths)))
-        if len_orig > 1 and len_unique != len_orig:
-            gLogger.warn("There are multiple GlueVOInfoPath entries with the "
-                         "same length for se: %s vo: %s, i.e. %s we will use "
-                         "the first." % (se_name, vo_name, sorted_paths))
-        norm_path = os.path.normpath(sorted_paths[0])
-        basename = os.path.dirname(norm_path)
-        ret[se_name] = {'Path': basename}
-        if os.path.join(basename, vo_name) != norm_path:
-            ret[se_name].update({'VOPath': norm_path})
-    return S_OK(ret)
-
-def checkSRMEndpoint(se, vo, vo_info, srms):
-    ''' Validates BDII info for an SRM and returns VO specific path.
-        Returns (True, path, vo_path, port) on success,
-                (False, None, None, None) on failure.
-        (Errors are also logged to main logging system).
-    '''
-    srmDict = srms.get(se)
-    if not srmDict:
-        gLogger.info("No SRM info for SE %s." % se)
-        return (False, None, None, None)
-
-    version = srmDict.get('GlueServiceVersion', '')
-    if not version.startswith('2'):
-        gLogger.warn("Not SRM version 2 (%s)" % se)
-        return (False, None, None, None)
-
-    url = urlparse(srmDict.get('GlueServiceEndpoint', ''))
-    port = str(url.port)
-    if port is None:
-        gLogger.warn("No port determined for %s" % se)
-        return (False, None, None, None)
-
-    path = vo_info.get(se, {}).get('Path')
-    if path is None:
-        gLogger.warn("Cannot find 'Path' for vo: %s, se: %s...skipping" % (vo, se))
-        return (False, None, None, None)
-    vo_path = vo_info.get(se, {}).get('VOPath') or os.path.join(path, vo)
-    return (True, path, vo_path, port)
-
-
-def checkROOTEndpoint(se, vo, vo_info, host):
-    ''' Validates BDII info for an XROOTD endpoint and returns VO specific path.
-        Returns (True, path, vo_path, port) on success,
-                (False, None, None, None) on failure.
-        (Errors are also logged to main logging system).
-    '''
-    xroots = [urlparse(i.get('GlueSEAccessProtocolEndpoint', '')).port
-              for i in ldapSEAccessProtocol(se, host=host).get('Value', [])
-              if i.get('GlueSEAccessProtocolType', '').lower().find('root') > -1]
-    if not xroots:
-        gLogger.info("No xrootd info for SE %s." % se)
-        return (False, None, None, None)
-
-    port = None
-    ports = [p for p in xroots if p is not None]
-    if ports:
-        port = 1094 if 1094 in ports else min(ports)
-
-    if port is None:
-        gLogger.warn("No port determined for %s" % se)
-        return (False, None, None, None)
-
-    path = vo_info.get(se, {}).get('Path')
-    if path is None:
-        gLogger.warn("Cannot find 'Path' for vo: %s, se: %s...skipping" % (vo, se))
-        return (False, None, None, None)
-    vo_path = vo_info.get(se, {}).get('VOPath') or os.path.join(path, vo)
-    return (True, path, vo_path, port)
-
-
-def checkUnusedSEs(vo, host=None, banned_ses=None):
-    '''
-    Check for unused SEs
-
-    vo                - The VO
-    host              - BDII host default, default = 'lcg-bdii.cern.ch:2170'
-    '''
-    if banned_ses is None:
-        banned_ses = []
-
-    result = ldapSE('*', vo=vo, host=host)
-    if not result['OK']:
-        return result
-    ses = dict(((i['GlueSEUniqueID'], i) for i in result['Value']
-                if '.' in i.get('GlueSEUniqueID', '')))
-
-    result = ldapService(serviceType='SRM', vo=vo, host=host)
-    if not result['OK']:
-        return result
-    srms = dict(((urlparse(i['GlueServiceEndpoint']).hostname, i)
-                 for i in result['Value'] if 'GlueServiceEndpoint' in i
-                 and urlparse(i['GlueServiceEndpoint']).hostname in ses))
-
-    result = _ldap_vo_info(vo, host=host)
-    if not result['OK']:
-        return result
-    vo_info = result['Value']
-
-    changeSet = _ConfigurationSystem()
-    cfgBase = '/Resources/StorageElements'
-    mapping = SiteNamingDict(cfgBase)
-    for se, se_info in sorted(ses.iteritems()):
-        if se in banned_ses:
-            continue
-        bdii_site_id = se_info.get('GlueSiteUniqueID')
-        se_latency = se_info.get('GlueSAAccessLatency', 'online').lower()
-        site = mapping.setdefault(se, mapping.nextValidName(bdii_site_id,
-                                                            se_latency))
-
-        seSection = cfgPath(cfgBase, site)
-        accessSection = cfgPath(seSection, 'AccessProtocol.1')
-        vopathSection = cfgPath(accessSection, 'VOPath')
-
-        backend_type = se_info.get('GlueSEImplementationName', 'Unknown')
-        description = se_info.get('GlueSEName')
-        total_size = se_info.get('GlueSETotalOnlineSize', 'Unknown')
-        base_rules = se_info.get('GlueSAAccessControlBaseRule', [])
-        if not isinstance(base_rules, list):
-            base_rules = [base_rules]
-        bdiiVOs = set([re.sub('^VO:', '', rule) for rule in base_rules])
-        # DIRACs Bdii2CSAgent used the ServiceAccessControlBaseRule value
-        srmDict = srms.get(se)
-        if srmDict:
-            bdiiVOs = set([re.sub('^VO:', '', rule) for rule in
-                           srmDict.get('GlueServiceAccessControlBaseRule', [])
-                           ])
-
-
-        hasSRM, SRMPath, SRMVOPath, SRMPort = checkSRMEndpoint(se, vo, vo_info, srms)
-        if hasSRM:
-           # If path is different from last VO then we just default the
-            # path to / and use the VOPath dict
-            old_path = gConfig.getValue(cfgPath(accessSection, 'Path'), None)
-            if old_path and SRMPath and SRMPath != old_path:
-                SRMPath = '/'
-            changeSet.add(vopathSection, vo, SRMVOPath)
-            changeSet.add(accessSection, 'Protocol', 'srm')
-            changeSet.add(accessSection, 'PluginName', 'GFAL2_SRM2')
-            changeSet.add(accessSection, 'Port', SRMPort)
-            changeSet.add(accessSection, 'Access', 'remote')
-            changeSet.add(accessSection, 'Path', SRMPath)
-            changeSet.add(accessSection, 'SpaceToken', '')
-            changeSet.add(accessSection, 'WSUrl', '/srm/managerv2?SFN=')
-            changeSet.add(accessSection, 'Host', se)
-            # Adjust accessSection for ROOT detection below
-            accessSection = cfgPath(seSection, 'AccessProtocol.2')
-            vopathSection = cfgPath(accessSection, 'VOPath')
-
-        hasROOT, ROOTPath, ROOTVOPath, ROOTPort = checkROOTEndpoint(se, vo, vo_info, host)
-        if hasROOT:
-           # If path is different from last VO then we just default the
-            # path to / and use the VOPath dict
-            old_path = gConfig.getValue(cfgPath(accessSection, 'Path'), None)
-            if old_path and ROOTPath and ROOTPath != old_path:
-                ROOTPath = '/'
-            changeSet.add(vopathSection, vo, ROOTVOPath)
-            changeSet.add(accessSection, 'Protocol', 'root')
-            changeSet.add(accessSection, 'PluginName', 'GFAL2_XROOT')
-            changeSet.add(accessSection, 'Port', ROOTPort)
-            changeSet.add(accessSection, 'Access', 'remote')
-            changeSet.add(accessSection, 'Path', ROOTPath)
-            changeSet.add(accessSection, 'SpaceToken', '')
-            changeSet.add(accessSection, 'Host', se)
-
-        if hasSRM or hasROOT:
-            changeSet.add(seSection, 'Host', se)
-        changeSet.add(seSection, 'BackendType', backend_type)
-        changeSet.add(seSection, 'Description', description)
-        changeSet.add(seSection, 'VO', bdiiVOs)
-        changeSet.add(seSection, 'TotalSize', total_size)
-        changeSet.add(seSection, 'LastSeen', date.today().strftime('%d/%m/%Y'))
-
-    return changeSet.commit()
+__all__ = ('update_ses', 'find_old_ses', 'update_ces', 'remove_old_ces')
 
 if __name__ == '__main__':
-    import sys
-    from optparse import OptionParser
     from DIRAC.Core.Base import Script
     Script.parseCommandLine()
-    parser = OptionParser()
-    parser.add_option("-v", "--vo", dest="vo",
-                      default='gridpp', metavar="VO",
-                      help="The VO [default: %default]")
-    parser.add_option("-d", "--domain", dest="domain",
-                      default='LCG', metavar="DOMAIN",
-                      help="The Grid domain e.g. [default: %default]")
-    parser.add_option("-t", "--host", dest="host",
-                      default='lcg-bdii.cern.ch:2170', metavar="HOST",
-                      help="The LDAP host [default: %default]")
-
-    (options, args) = parser.parse_args()
-
-    gLogger.notice('-------------------------------------------------------')
-    gLogger.notice('looking for new computing resources in BDII database...')
-    gLogger.notice('-------------------------------------------------------')
-
-    gLogger.notice('')
-    gLogger.notice('** Checking for unused Sites/CEs')
-    gLogger.notice('--------------------------------')
-
-    result = checkUnusedCEs(options.vo,
-                            host=options.host,
-                            domain=options.domain)
-    if not result['OK']:
-        gLogger.error("Error while running check for unused CEs",
-                      result['Message'])
-        sys.exit(1)
-    ceBdii = result['Value']
-
-    gLogger.notice('')
-    gLogger.notice('** Checking for unused Sites/SEs')
-    gLogger.notice('--------------------------------')
-
-    result = checkUnusedSEs(options.vo, host=options.host)
-    if not result['OK']:
-        gLogger.error("Error while running check for unused SEs:",
-                      result['Message'])
-        sys.exit(1)
-    seBdii = result['Value']
-
-    gLogger.notice('')
-    gLogger.notice('** Checking for old sites')
-    gLogger.notice('-------------------------')
-
-    result = removeOldCEs(domain=options.domain)
-    if not result['OK']:
-        gLogger.error("Error while running check for old sites:",
-                      result['Message'])
-        sys.exit(1)
-
-    gLogger.notice('')
-    gLogger.notice('** Updating site CE/SE lists')
-    gLogger.notice('-------------------------')
-
-    result = rebuildSiteLists(domain=options.domain)
-    if not result['OK']:
-        gLogger.error("Error while running site list update:",
-                      result['Message'])
-        sys.exit(1)
-
-#    gLogger.notice('')
-#    gLogger.notice('-------------------------------------------------------')
-#    gLogger.notice('Fetching updated info for sites in CS from BDII...     ')
-#    gLogger.notice('-------------------------------------------------------')
-#
-#    gLogger.notice('')
-#    gLogger.notice('** Checking for updates in CS defined Sites/CEs')
-#    gLogger.notice('-----------------------------------------------')#
-#
-#    result = updateSites(options.vo, ceBdii)
-#    if not result['OK']:
-#        gLogger.error("Error while updating sites", result['Message'])
-#        sys.exit(1)
+    update_ses(vo='gridpp', host='lcg-bdii.cern.ch:2170')
+    update_ces(vo='gridpp', host='lcg-bdii.cern.ch:2170')
