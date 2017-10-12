@@ -50,10 +50,25 @@ def update_ses(vo, host=None, banned_ses=None):
     if not vo_info:
         gLogger.warn("No SE -> VO info path mapping for any SE.")
 
+
+    cfg_system = ConfigurationSystem()
+    # Get existing SEs hosts
+    ##############################
+    dirac_ses = {}
+    result = cfg_system.getCurrentCFG()
+    if not result['OK']:
+        gLogger.error('Could not get current config from the CS')
+        raise RuntimeError("Error finding current SEs.")
+
+    for se, se_info in result['Value'].getAsDict('/Resources/StorageElements').iteritems():
+        host = se_info.get('Host') or se_info.get('AccessProtocol.1', {}).get('Host')
+        if host is not None:
+            dirac_ses[se] = host
+        else:
+            gLogger.warn("No host found for SE: %s" % se)
+
     # Main loop
     ##############################
-    dirac_ses = set()
-    cfg_system = ConfigurationSystem()
     for se, se_info in sorted(ses.iteritems()):
         if banned_ses is not None and se in banned_ses:
             gLogger.info("Skipping banned SE: %s" % se)
@@ -71,7 +86,8 @@ def update_ses(vo, host=None, banned_ses=None):
             gLogger.warn("Skipping problematic SE: %s" % se)
             continue
         se.write(cfg_system, '/Resources/StorageElements')
-        dirac_ses.add(se.DiracName)
+        host = se.Host or se.AccessProtocols[0].Host
+        dirac_ses[se.DiracName] = host
     cfg_system.commit()
 
 
