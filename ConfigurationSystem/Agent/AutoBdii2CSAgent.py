@@ -135,7 +135,7 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
                 DIRAC AutoBDII2CS Agent
                 """).lstrip('\n') \
                     .format(ses='\n'.join(' - %s (%s)' % se for se in old_ses))
-                result = NotificationClient().sendMail(address=self.addressTo,
+                result = NotificationClient().sendMail(addresses=self.addressTo,
                                                        subject='GridPP DIRAC Old SE Notification',
                                                        body=body,
                                                        fromAddress=self.addressFrom,
