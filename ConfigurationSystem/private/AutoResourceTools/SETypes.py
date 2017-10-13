@@ -145,13 +145,22 @@ class SE(WritableMixin, namedtuple('SE', ('DiracName',
     def __new__(cls, se, se_info, srms, xrootd_ports, vo, vo_info, existing_ses=None):
         """Constructor."""
         if existing_ses is None:
-            existing_ses = ()
+            existing_ses = {}
         bdii_site_id = se_info.get('GlueSiteUniqueID')
-        se_latency = se_info.get('GlueSAAccessLatency', 'online').lower()
-        count = len([i for i in existing_ses if i.startswith(bdii_site_id)])
-        dirac_name = '%s%s-%s' % (bdii_site_id,
-                                  count or '',
-                                  SE.latency_mapping.get(se_latency, 'disk'))
+        se_latency = SE.latency_mapping.get(se_info.get('GlueSAAccessLatency', 'online').lower(),
+                                            'disk')
+        dirac_name = None
+        matching_ses = {se: host for se, host in existing_ses.iteritems()\
+                        if se.startswith(bdii_site_id) and se.endswith(se_latency)}
+        for dirac_sename, hostname in matching_ses:
+            if hostname == se:
+                dirac_name = dirac_sename
+
+        if dirac_name is None:
+            count = len(matching_ses)
+            dirac_name = '%s%s-%s' % (bdii_site_id,
+                                      count or '',
+                                      se_latency)
 
         srm_dict = srms.get(se)
         # DIRACs Bdii2CSAgent used the ServiceAccessControlBaseRule value
@@ -176,7 +185,7 @@ class SE(WritableMixin, namedtuple('SE', ('DiracName',
         return super(SE, cls).__new__(cls,
                                       DiracName=dirac_name,
                                       AccessProtocols=tuple(aps),
-                                      Host=se if aps else None,
+                                      Host=se if not aps else None,
                                       BackendType=se_info.get('GlueSEImplementationName', 'Unknown'),
                                       Description=se_info.get('GlueSEName'),
                                       VO=', '.join(sorted(bdii_vos)),
