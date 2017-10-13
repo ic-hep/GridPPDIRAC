@@ -61,9 +61,9 @@ def update_ses(vo, host=None, banned_ses=None):
         raise RuntimeError("Error finding current SEs.")
 
     for se, se_info in result['Value'].getAsDict('/Resources/StorageElements').iteritems():
-        host = se_info.get('Host') or se_info.get('AccessProtocol.1', {}).get('Host')
-        if host is not None:
-            dirac_ses[se] = host
+        cs_host = se_info.get('Host') or se_info.get('AccessProtocol.1', {}).get('Host')
+        if cs_host is not None:
+            dirac_ses[se] = cs_host
         else:
             gLogger.warn("No host found for SE: %s" % se)
 
@@ -86,8 +86,7 @@ def update_ses(vo, host=None, banned_ses=None):
             gLogger.warn("Skipping problematic SE: %s" % se)
             continue
         se.write(cfg_system, '/Resources/StorageElements')
-        host = se.Host or se.AccessProtocols[0].Host
-        dirac_ses[se.DiracName] = host
+        dirac_ses[se.DiracName] = se.Host or se.AccessProtocols[0].Host
     cfg_system.commit()
 
 
