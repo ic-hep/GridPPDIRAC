@@ -152,7 +152,7 @@ class SE(WritableMixin, namedtuple('SE', ('DiracName',
         dirac_name = None
         matching_ses = {se: host for se, host in existing_ses.iteritems()\
                         if se.startswith(bdii_site_id) and se.endswith(se_latency)}
-        for dirac_sename, hostname in matching_ses:
+        for dirac_sename, hostname in matching_ses.iteritems():
             if hostname == se:
                 dirac_name = dirac_sename
 
