@@ -14,7 +14,7 @@ from DIRAC.WorkloadManagementSystem.Agent.SiteDirector import SiteDirector as Or
 
 DIRAC_MODULES = [ os.path.join( DIRAC.rootPath, 'DIRAC', 'WorkloadManagementSystem', 'PilotAgent', 'pilotCommands.py' ),
                   os.path.join( DIRAC.rootPath, 'GridPPDIRAC', 'WorkloadManagementSystem', 'PilotAgent', 'GridPPCommands.py' ),
-                  os.path.join( DIRAC.rootPath, 'GridPPDIRAC', 'WorkloadManagementSystem', 'PilotAgent', 'pilotTools.py' ) ]
+                  os.path.join( DIRAC.rootPath, 'DIRAC', 'WorkloadManagementSystem', 'PilotAgent', 'pilotTools.py' ) ]
 
 class SiteDirector( OriginalSiteDirector ):
   """
