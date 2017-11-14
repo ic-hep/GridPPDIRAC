@@ -91,6 +91,8 @@ class AutoVac2CSAgent(AgentModule):
             self.log.exception("Problem removing old hosts/sites.")
             return S_ERROR("Problem processing GOCDB CLOUD (vcycle) information")
 
+        return S_OK()
+
     def process_gocdb_results(self, services, site_path_prefix, cfg_system, country_default='xx'):
         """
         Process GOCDB results.
