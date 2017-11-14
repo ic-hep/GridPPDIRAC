@@ -14,7 +14,7 @@ from DIRAC import S_OK, S_ERROR
 from DIRAC.Core.Base.AgentModule import AgentModule
 from DIRAC.Core.LCG.GOCDBClient import GOCDBClient
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
-from ..private.AutoResourceTools.ConfigurationSystem import ConfigurationSystem
+from GridPPDIRAC.ConfigurationSystem.private.AutoResourceTools.ConfigurationSystem import ConfigurationSystem
 
 __RCSID__ = "$Id$"
 
@@ -22,7 +22,6 @@ CN_REGEX = re.compile(r'CN=([^/]*)')
 VOKEY_EXTENSION_REGEX = re.compile(r'^PILOT_(SE|DN)_(.*)$')
 HOSTS_BASE = "Registry/Hosts"
 SITES_BASE = "Resources/Sites"
-
 
 class AutoVac2CSAgent(AgentModule):
     """
@@ -32,6 +31,11 @@ class AutoVac2CSAgent(AgentModule):
     """
 
     max_cputime_map = {'VAC': 400000, 'CLOUD': 24000000}
+    cc_regex = re.compile(r'\.([a-zA-Z]{2})$')
+    cc_mappings = {'.gov': 'us',
+                   '.edu': 'us',
+                   'efda.org': 'uk',
+                   'atlas-swt2.org': 'us'}
 
     def initialize(self, *args, **kwargs):
         """
@@ -87,7 +91,7 @@ class AutoVac2CSAgent(AgentModule):
             self.log.exception("Problem removing old hosts/sites.")
             return S_ERROR("Problem processing GOCDB CLOUD (vcycle) information")
 
-    def process_gocdb_results(self, services, site_path_prefix, cfg_system):
+    def process_gocdb_results(self, services, site_path_prefix, cfg_system, country_default='xx'):
         """
         Process GOCDB results.
 
@@ -102,12 +106,13 @@ class AutoVac2CSAgent(AgentModule):
             # Resources
             sitename = service.get('SITENAME')
             hostname = service.get('HOSTNAME')
+            country_code = AutoVac2CSAgent.extract_cc(hostname) or country_default
             if sitename is None or hostname is None:
                 self.log.warn("Missing sitename or hostname for service:\n%s" % pformat(service))
                 continue
 
-            site_path = cfgPath(SITES_BASE, site_path_prefix, "%s.%s"
-                                % (site_path_prefix, sitename))
+            site_path = cfgPath(SITES_BASE, site_path_prefix, "%s.%s.%s"
+                                % (site_path_prefix, sitename, country_code))
             ce_path = cfgPath(site_path, 'CEs', hostname)
             queue_path = cfgPath(ce_path, 'Queues', 'default')
             cfg_system.add(site_path, 'Name', sitename)
@@ -206,3 +211,20 @@ class AutoVac2CSAgent(AgentModule):
                 cfg_system.remove(section=host_path)
         cfg_system.commit()
         return S_OK()
+
+    @classmethod
+    def extract_cc(cls, ce, cc_mappings=None, cc_regex=None):
+        """Extract the 2 character country code from the CE name."""
+        if cc_mappings is None:
+            cc_mappings = cls.cc_mappings
+        if cc_regex is None:
+            cc_regex = cls.cc_regex
+
+        ce = ce.strip().lower()
+        for key, value in cc_mappings.iteritems():
+            if ce.endswith(key):
+                return value
+        cc = cc_regex.search(ce)
+        if cc is not None:
+            cc = cc.groups()[0]
+        return cc
