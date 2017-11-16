@@ -1,8 +1,22 @@
 """Dirac multiVO Configuration system."""
+from itertools import chain
+from collections import defaultdict
 from types import GeneratorType
 from DIRAC import gLogger, gConfig
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
 from DIRAC.ConfigurationSystem.Client.CSAPI import CSAPI
+
+
+
+class ConfigDefaultDict(defaultdict):
+    def __missing__(self, key):
+        old_values = (v.strip() for v in gConfig.getValue(key, '').split(',') if v)
+        value = super(ConfigDefaultDict, self).__missing__(key)
+        if isinstance(value, list):
+            value.extend(old_values)
+        elif isinstance(value, set):
+            value.update(old_values)
+        return value
 
 
 class ConfigurationSystem(CSAPI):
@@ -12,6 +26,8 @@ class ConfigurationSystem(CSAPI):
         """initialise."""
         CSAPI.__init__(self)
         self._num_changes = 0
+        self._append_dict = ConfigDefaultDict(list)
+        self._append_unique_dict = ConfigDefaultDict(set)
         result = self.initialize()
         if not result['OK']:
             gLogger.error('Failed to initialise CSAPI object:',
@@ -65,15 +81,10 @@ class ConfigurationSystem(CSAPI):
             option (str): The option to be modified
             new_value: The value to be appended
         """
-#        old_values = [v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v]
-        old_values = (v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(','))
-        new_values = [v for v in old_values if v]
-
         if isinstance(new_value, (tuple, list, set, GeneratorType)):
-            new_values.extend(new_value)
+            self._append_dict[cfgPath(section, option)].extend(new_value)
         else:
-            new_values.append(new_value)
-        self.add(section, option, new_values)
+            self._append_dict[cfgPath(section, option)].append(new_value)
 
     def append_unique(self, section, option, new_value):
         """
@@ -87,15 +98,11 @@ class ConfigurationSystem(CSAPI):
             option (str): The option to be modified
             new_value: The value to be appended
         """
-#        old_values = set(v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(',') if v)
-        old_values = (v.strip() for v in gConfig.getValue(cfgPath(section, option), '').split(','))
-        new_values = set(v for v in old_values if v)
 
         if isinstance(new_value, (tuple, list, set, GeneratorType)):
-            new_values.update(map(str, new_value))
+            self._append_unique_dict[cfgPath(section, option)].update(new_value)
         else:
-            new_values.add(str(new_value))
-        self.add(section, option, new_values)
+            self._append_unique_dict[cfgPath(section, option)].add(new_value)
 
     def remove(self, section, option=None, value=None):
         """
@@ -134,6 +141,13 @@ class ConfigurationSystem(CSAPI):
 
     def commit(self):
         """Commit the changes to the configuration system."""
+        # Perform all the appending operations at the end to only get from current config once.
+        for path, value in chain(self._append_dict.iteritems(),
+                                 self._append_unique_dict.iteritems()):
+            section, option = path.rsplit('/', 1)
+            self.add(section, option, value)
+            self._num_changes += 1
+
         result = CSAPI.commit(self)
         if not result['OK']:
             gLogger.error("Error while commit to CS", result['Message'])
@@ -142,6 +156,8 @@ class ConfigurationSystem(CSAPI):
             gLogger.notice("Successfully committed %d changes to CS\n"
                            % self._num_changes)
             self._num_changes = 0
+            self._append_dict.clear()
+            self._append_unique_dict.clear()
         else:
             gLogger.notice("No changes to commit")
 

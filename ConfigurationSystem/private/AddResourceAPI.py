@@ -206,6 +206,7 @@ def remove_old_ces(removal_threshold=5, domain='LCG', banned_ces=None):
 
         if old_ces:
             cfg_system.remove(section=site_path, option='CE', value=old_ces)
+            old_ces.clear()
     cfg_system.commit()
 
 __all__ = ('update_ses', 'find_old_ses', 'update_ces', 'remove_old_ces')
