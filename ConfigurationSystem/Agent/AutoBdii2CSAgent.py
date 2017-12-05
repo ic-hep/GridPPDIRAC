@@ -17,8 +17,8 @@ from DIRAC.ConfigurationSystem.Client.CSAPI import CSAPI
 from DIRAC.ConfigurationSystem.Agent.Bdii2CSAgent import Bdii2CSAgent
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
 from DIRAC.FrameworkSystem.Client.NotificationClient import NotificationClient
+from GridPPDIRAC.ConfigurationSystem.private.AutoBDIISEs import update_ses
 from GridPPDIRAC.ConfigurationSystem.private.AddResourceAPI import (update_ces,
-                                                                    update_ses,
                                                                     remove_old_ces,
                                                                     find_old_ses)
 
@@ -62,21 +62,21 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
 
     def execute(self):
         """General agent execution method."""
+        # Update SEs
+        ##############################
+        if self.processSEs:
+            try:
+                update_ses(self.voName,
+                           address=(self.bdii_host, 2170),
+                           banned_ses=self.banned_ses)
+            except Exception as err:
+                self.log.error("Error while running check for unused SEs "
+                               "in the VO %s: %s"
+                               % (vo, err))
+
         # VO loop
         ##############################
         for vo in self.voName:
-            # Update SEs
-            ##############################
-            if self.processSEs:
-                try:
-                    # Update SEs returning those last seen > notification_threshold
-                    update_ses(vo=vo, host=self.bdii_host, banned_ses=self.banned_ses)
-                except Exception as err:
-                    self.log.error("Error while running check for unused SEs "
-                                   "in the VO %s: %s"
-                                   % (vo, err))
-                    continue
-
             # Update CEs
             ##############################
             if self.processCEs:
