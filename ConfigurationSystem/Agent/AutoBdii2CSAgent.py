@@ -9,6 +9,7 @@ default parameters.
 For the CEs and SEs already present in the CS, the agent is updating
 if necessary settings which were changed in the BDII recently
 """
+from urlparse import urlparse
 from datetime import datetime, date, timedelta
 from textwrap import dedent
 
@@ -65,9 +66,10 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
         # Update SEs
         ##############################
         if self.processSEs:
+            url = urlparse('//%s' % self.bdii_host)
             try:
                 update_ses(self.voName,
-                           address=(self.bdii_host, 2170),
+                           address=(url.hostname, url.port if url.port is not None else 2170),
                            banned_ses=self.banned_ses)
             except Exception as err:
                 self.log.exception("Error while running check for unused SEs")
