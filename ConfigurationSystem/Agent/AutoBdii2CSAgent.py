@@ -70,9 +70,7 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
                            address=(self.bdii_host, 2170),
                            banned_ses=self.banned_ses)
             except Exception as err:
-                self.log.error("Error while running check for unused SEs "
-                               "in the VO %s: %s"
-                               % (vo, err))
+                self.log.exception("Error while running check for unused SEs")
 
         # VO loop
         ##############################
