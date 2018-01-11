@@ -230,8 +230,10 @@ def update_ses(considered_vos=None, cfg_base_path='/Resources/StorageElements',
             cs.add(ap_path, 'SpaceToken', '')
             cs.add(ap_path, 'WSUrl', '/srm/managerv2?SFN=')
             vo_path = os.path.join(ap_path, 'VOPath')
-            for key, val in sorted(vopaths.iteritems()):
-                cs.add(vo_path, key, val)
+            for vo_name, paths in sorted(vopaths.iteritems()):
+                valid_paths = sorted(path for path in paths if not path.isupper())
+                if valid_paths:
+                    cs.add(vo_path, vo_name, min(valid_paths, key=len))
 
         if xrootdports and vopaths:
             if xroot_ap_index is None:
@@ -247,8 +249,10 @@ def update_ses(considered_vos=None, cfg_base_path='/Resources/StorageElements',
             cs.add(ap_path, 'Protocol', 'root')
             cs.add(ap_path, 'SpaceToken', '')
             vo_path = os.path.join(ap_path, 'VOPath')
-            for key, val in sorted(vopaths.iteritems()):
-                cs.add(vo_path, key, val)
+            for vo_name, paths in sorted(vopaths.iteritems()):
+                valid_paths = sorted(path for path in paths if not path.isupper())
+                if valid_paths:
+                    cs.add(vo_path, vo_name, min(valid_paths, key=len))
 
     cs.commit()
 
