@@ -9,6 +9,7 @@ default parameters.
 For the CEs and SEs already present in the CS, the agent is updating
 if necessary settings which were changed in the BDII recently
 """
+from urlparse import urlparse
 from datetime import datetime, date, timedelta
 from textwrap import dedent
 
@@ -17,8 +18,8 @@ from DIRAC.ConfigurationSystem.Client.CSAPI import CSAPI
 from DIRAC.ConfigurationSystem.Agent.Bdii2CSAgent import Bdii2CSAgent
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
 from DIRAC.FrameworkSystem.Client.NotificationClient import NotificationClient
+from GridPPDIRAC.ConfigurationSystem.private.AutoBDIISEs import update_ses
 from GridPPDIRAC.ConfigurationSystem.private.AddResourceAPI import (update_ces,
-                                                                    update_ses,
                                                                     remove_old_ces,
                                                                     find_old_ses)
 
@@ -62,36 +63,29 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
 
     def execute(self):
         """General agent execution method."""
-        # VO loop
+        # Update SEs
         ##############################
-        for vo in self.voName:
-            # Update SEs
-            ##############################
-            if self.processSEs:
-                try:
-                    # Update SEs returning those last seen > notification_threshold
-                    update_ses(vo=vo, host=self.bdii_host, banned_ses=self.banned_ses)
-                except Exception as err:
-                    self.log.error("Error while running check for unused SEs "
-                                   "in the VO %s: %s"
-                                   % (vo, err))
-                    continue
+        if self.processSEs:
+            url = urlparse('//%s' % self.bdii_host)
+            try:
+                update_ses(self.voName,
+                           address=(url.hostname, url.port if url.port is not None else 2170),
+                           banned_ses=self.banned_ses)
+            except Exception:
+                self.log.exception("Error while running check for new SEs")
 
-            # Update CEs
-            ##############################
-            if self.processCEs:
-                try:
-                    update_ces(vo=vo,
-                               host=self.bdii_host,
-                               domain=self.domain,
-                               country_default=self.country_default,
-                               banned_ces=self.banned_ces,
-                               max_processors=self.am_getOption('FixedMaxProcessors', None))
-                except Exception as err:
-                    self.log.error("Error while running check for unused CEs "
-                                   "in the VO %s: %s"
-                                   % (vo, err))
-                    continue
+        # Update CEs
+        ##############################
+        if self.processCEs:
+            try:
+                update_ces(voList=self.voName,
+                           host=self.bdii_host,
+                           domain=self.domain,
+                           country_default=self.country_default,
+                           banned_ces=self.banned_ces,
+                           max_processors=self.am_getOption('FixedMaxProcessors', None))
+            except Exception:
+                self.log.exception("Error while running check for new CEs")
 
         # Remove old CEs with last_seen > threshold
         ##############################

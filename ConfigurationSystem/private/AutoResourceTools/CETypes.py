@@ -23,31 +23,34 @@ class Site(WritableMixin, namedtuple('Site', ('DiracName',
                    'efda.org': 'uk',
                    'atlas-swt2.org': 'us'}
 
-    def __new__(cls, site, site_info, domain='LCG', country_default='xx', banned_ces=None, max_processors=None):
+    def __new__(cls, site, site_info_lst, domain='LCG', country_default='xx', banned_ces=None, max_processors=None):
         """Constructor."""
         ces = []
         ce_list = set()
         country_code = country_default
-        for ce, ce_info in sorted(site_info.get('CEs', {}).iteritems()):
-            if banned_ces is not None and ce in banned_ces:
-                continue
 
-            if country_code == country_default:
-                country_code = Site.extract_cc(ce) or country_default
+        # We have to collect CE names across all VOs        
+        for site_info in site_info_lst:
+            for ce, ce_info in sorted(site_info.get('CEs', {}).iteritems()):
+               if banned_ces is not None and ce in banned_ces:
+                   continue
 
-            ce_list.add(ce)
-            ces.append(CE(ce, ce_info, max_processors))
+               if country_code == country_default:
+                   country_code = Site.extract_cc(ce) or country_default
+
+               ce_list.add(ce)
+               ces.append(CE(ce, ce_info, max_processors))
 
         se_list = set(se for se in gConfig.getSections('/Resources/StorageElements').get('Value', [])
                       if se.startswith(site))
         return super(Site, cls).__new__(cls,
                                         DiracName='.'.join((domain, site, country_code)),
-                                        Name=site_info.get('GlueSiteName').strip(),
+                                        Name=site_info_lst[0].get('GlueSiteName').strip(),
                                         CEs=ces,
-                                        Description=site_info.get('GlueSiteDescription').strip(),
-                                        Coordinates=':'.join((site_info.get('GlueSiteLongitude').strip(),
-                                                              site_info.get('GlueSiteLatitude').strip())),
-                                        Mail=site_info.get('GlueSiteSysAdminContact').replace('mailto:', '').strip(),
+                                        Description=site_info_lst[0].get('GlueSiteDescription').strip(),
+                                        Coordinates=':'.join((site_info_lst[0].get('GlueSiteLongitude').strip(),
+                                                              site_info_lst[0].get('GlueSiteLatitude').strip())),
+                                        Mail=site_info_lst[0].get('GlueSiteSysAdminContact').replace('mailto:', '').strip(),
                                         CE=', '.join(sorted(ce_list)),
                                         SE=', '.join(sorted(se_list)))
 
