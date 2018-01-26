@@ -35,13 +35,15 @@ def ldapsearch_bdii_ses(address=('lcg-bdii.cern.ch', 2170),
     # using wildcard enforces that attribute MUST be present
     sas = ldap_conn.search_s(base=base, scope=scope,
                              filterstr="(&(objectClass=GlueSA)"
-                             "(GlueSAAccessLatency=*)"
                              "(GlueChunkKey=*))")
     sa_dict = {}
     for _, sa in sorted(sas):
         se = max(sa['GlueChunkKey'], key=len).replace('GlueSEUniqueID=', '')
-        latency = latency_mapping.get(max(sa['GlueSAAccessLatency'], key=len).lower(),
-                                      'disk')
+        if 'GlueSAAccessLatency' in sa:
+            latency = latency_mapping.get(max(sa['GlueSAAccessLatency'], key=len).lower(),
+                                          'disk')
+        else:
+            latency = 'disk'
         sa_dict.setdefault(se, {}).setdefault(latency, []).append(sa)
 
     # Get SRM records
