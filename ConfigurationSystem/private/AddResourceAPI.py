@@ -127,13 +127,13 @@ def find_old_ses(notification_threshold=14):
     return sorted(old_ses)
 
 
-def update_ces(vo, domain='LCG', country_default='xx', host=None,
+def update_ces(voList, domain='LCG', country_default='xx', host=None,
                banned_ces=None, max_processors=None):
     """
-    Update the CEs in the Dirac config for certain VO.
+    Update the CEs in the Dirac config for certain VO list.
 
     Args:
-        vo (str): Updating CEs associated with this VO
+        vo (list): Updating CEs associated with these VOs
         domain (str): The domain acts as a root directory to the discovered sites as well as
                       prefixing their Dirac names.
         country_default (str): Country code for the Dirac site name is auto discovered from the sites
@@ -145,23 +145,31 @@ def update_ces(vo, domain='LCG', country_default='xx', host=None,
                                   value for a site which is defined for all CEs.
     """
     # Get CE info from BDII
+    #  We collect across all VOs to prevent "flip-floping" of CE lists.
     ##############################
-    result = getBdiiCEInfo(vo, host=host)
-    if not result['OK']:
-        gLogger.error("Failed to call getBdiiCEInfo(vo=%s, host=%s): %s" % (vo, host, result['Message']))
-        raise RuntimeError("getBdiiCEInfo failure.")
+    site_details = {}
+    for vo in voList:
+        result = getBdiiCEInfo(vo, host=host)
+        if not result['OK']:
+            gLogger.error("Failed to call getBdiiCEInfo(vo=%s, host=%s): %s" % (vo, host, result['Message']))
+            raise RuntimeError("getBdiiCEInfo failure.")
 
-    ce_bdii_dict = result['Value']
+        ce_bdii_dict = result['Value']
+        if not ce_bdii_dict:
+            gLogger.warn("No CEs found in BDII for %s" % vo)
 
-    if not ce_bdii_dict:
-        gLogger.warn("No CEs found in BDII")
+        for site_name, site_info in ce_bdii_dict.iteritems():
+            if site_name in site_details:
+                site_details[site_name].append(site_info)
+            else:
+                site_details[site_name] = [site_info]
 
     # Main update loop
     ##############################
     cfg_system = ConfigurationSystem()
-    for site, site_info in sorted(ce_bdii_dict.iteritems()):  # pylint: disable=no-member
+    for site, site_info_lst in sorted(site_details.iteritems()):
         try:
-            s = Site(site, site_info, domain, country_default, banned_ces, max_processors)
+            s = Site(site, site_info_lst, domain, country_default, banned_ces, max_processors)
         except Exception:
             gLogger.warn("Skipping problematic site: %s" % site)
             continue

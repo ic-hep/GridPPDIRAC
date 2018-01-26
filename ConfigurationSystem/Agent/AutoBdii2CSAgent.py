@@ -71,27 +71,21 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
                 update_ses(self.voName,
                            address=(url.hostname, url.port if url.port is not None else 2170),
                            banned_ses=self.banned_ses)
-            except Exception as err:
-                self.log.exception("Error while running check for unused SEs")
+            except Exception:
+                self.log.exception("Error while running check for new SEs")
 
-        # VO loop
+        # Update CEs
         ##############################
-        for vo in self.voName:
-            # Update CEs
-            ##############################
-            if self.processCEs:
-                try:
-                    update_ces(vo=vo,
-                               host=self.bdii_host,
-                               domain=self.domain,
-                               country_default=self.country_default,
-                               banned_ces=self.banned_ces,
-                               max_processors=self.am_getOption('FixedMaxProcessors', None))
-                except Exception as err:
-                    self.log.error("Error while running check for unused CEs "
-                                   "in the VO %s: %s"
-                                   % (vo, err))
-                    continue
+        if self.processCEs:
+            try:
+                update_ces(voList=self.voName,
+                           host=self.bdii_host,
+                           domain=self.domain,
+                           country_default=self.country_default,
+                           banned_ces=self.banned_ces,
+                           max_processors=self.am_getOption('FixedMaxProcessors', None))
+            except Exception:
+                self.log.exception("Error while running check for new CEs")
 
         # Remove old CEs with last_seen > threshold
         ##############################
