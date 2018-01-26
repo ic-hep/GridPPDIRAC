@@ -106,7 +106,7 @@ def ldapsearch_bdii_ses(address=('lcg-bdii.cern.ch', 2170),
         # attach DIRAC name and VOs
         host = max(se['GlueSEUniqueID'], key=len)
         se['host'] = host
-        srm_vos = srm_dict.get(host, {}).get('GlueServiceAccessControlBaseRule', [])
+        srm_vos = sa_dict.get(host, {}).get('GlueSAAccessControlBaseRule', [])
         latency_dict = sa_dict.get(host, {})
         for latency, sas in latency_dict.iteritems():
             current_dirac_cfg = existing_dirac_names.get(host, {}).get(latency, {})
