@@ -92,8 +92,9 @@ class CE(WritableMixin, namedtuple('CE', ('DiracName',
         queues = []
         ce_type = ''
         ce_logical_cpus = int(ce_info.get('GlueSubClusterLogicalCPUs', 0))
+        ce_si00 = ce_info.get('GlueHostBenchmarkSI00', '')
         for queue, queue_info in sorted(ce_info.get('Queues', {}).iteritems()):
-            queues.append(Queue(queue, queue_info, ce_logical_cpus))
+            queues.append(Queue(queue, queue_info, ce_logical_cpus, ce_si00))
             ce_type = queue_info.get('GlueCEImplementationName', '')
 
         num_cores = int(max_processors or ce_info.get('GlueHostArchitectureSMPSize', 1))
@@ -103,7 +104,7 @@ class CE(WritableMixin, namedtuple('CE', ('DiracName',
                                       MaxProcessors=num_cores if num_cores > 1 else None,
                                       LastSeen=date.today().strftime('%d/%m/%Y'),
                                       architecture=ce_info.get('GlueHostArchitecturePlatformType', ''),
-                                      SI00=ce_info.get('GlueHostBenchmarkSI00', ''),
+                                      SI00=ce_si00,
                                       HostRAM=ce_info.get('GlueHostMainMemoryRAMSize', ''),
                                       CEType='ARC' if ce_type == 'ARC-CE' else ce_type,
                                       OS='EL' + ce_info.get('GlueHostOperatingSystemRelease', '').split('.')[0].strip(),
@@ -121,7 +122,7 @@ class Queue(WritableMixin, namedtuple('Queue', ('DiracName',
 
     __slots__ = ()
 
-    def __new__(cls, queue, queue_info, ce_logical_cpus=0):
+    def __new__(cls, queue, queue_info, ce_logical_cpus=0, ce_si00=0):
         """Constructor."""
         max_cpu_time = queue_info.get('GlueCEPolicyMaxCPUTime')
         if max_cpu_time == "0" or max_cpu_time == "2147483647":
@@ -145,6 +146,10 @@ class Queue(WritableMixin, namedtuple('Queue', ('DiracName',
             if 'CPUScalingReferenceSI00' in i:
                 si00 = i.split('=')[-1].strip()
                 break
+        if not si00:
+            # We couldn't get an SI00 value for this queue
+            # Inherit the value from the host
+            si00 = ce_si00
 
         # MaxTotalJobs in dirac is (running jobs (i.e. hardware) + waiting jobs)
         max_total_jobs_slots = int(queue_info.get('GlueCEInfoTotalCPUs', 0)) or ce_logical_cpus
