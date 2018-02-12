@@ -71,11 +71,14 @@ class SiteDirector( OriginalSiteDirector ):
     self.queueSlots[queue]['AvailableSlotsCount'] += 1
     return totalSlots
 
-  def _getPilotOptions( self, queue, pilotsToSubmit):
+  def _getPilotOptions( self, queue, pilotsToSubmit, **kwargs ):
     """ Prepare pilot options
     """
     pilotOptions, pilotsToSubmit = OriginalSiteDirector._getPilotOptions(self, queue, pilotsToSubmit)
     # Get the module specific options
     if self.extraOptions:
       pilotOptions.append( self.extraOptions )
+    processors = kwargs.pop('processors', -1)
+    if processors > 0:
+      pilotOptions.append( '-P %u' % processors )
     return [pilotOptions, pilotsToSubmit]
