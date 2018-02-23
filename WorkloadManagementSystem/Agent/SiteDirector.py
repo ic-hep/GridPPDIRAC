@@ -27,6 +27,8 @@ class SiteDirector( OriginalSiteDirector ):
                  for the agent restart
   """
 
+  def __init__( self, *args, **kwargs ):
+    super(SiteDirector, self).__init__( *args, **kwargs )
 
   def beginExecution( self ):
     # Get the extra pilot options for this SiteDirector instance
@@ -78,7 +80,7 @@ class SiteDirector( OriginalSiteDirector ):
     # Get the module specific options
     if self.extraOptions:
       pilotOptions.append( self.extraOptions )
-    processors = kwargs.pop('processors', -1)
+    processors = kwargs.pop('processors', 1)
     if processors > 0:
-      pilotOptions.append( '-P %u' % processors )
+      pilotOptions.append( '--maxNumberOfProcessors %u' % processors )
     return [pilotOptions, pilotsToSubmit]
