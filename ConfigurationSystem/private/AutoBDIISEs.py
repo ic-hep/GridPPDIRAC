@@ -2,6 +2,7 @@
 """Auto SE BDII to config tools."""
 import os
 import re
+import copy
 from itertools import chain
 from collections import Counter
 from datetime import date
@@ -137,7 +138,10 @@ def ldapsearch_bdii_ses(address=('lcg-bdii.cern.ch', 2170),
             if dirac_name in se_dict:
                 gLogger.warn("DIRAC name '%s' already in dict, won't add it again" % dirac_name)
                 continue
-            se_dict[dirac_name] = se
+            # We copy the SE dict here otherwise a later entry (i.e. a -tape latency)
+            # will update the earlier (-disk?) entry causing things such as the VO
+            # list to be incorrectly overwritten.
+            se_dict[dirac_name] = copy.deepcopy(se)
 
     # Get XRootD ports
     # ################
