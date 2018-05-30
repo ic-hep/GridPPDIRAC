@@ -12,9 +12,22 @@ from suds.client import Client
 from DIRAC import gConfig, S_OK, S_ERROR, gLogger
 from DIRAC.Core.Security.Locations import (getHostCertificateAndKeyLocation,
                                            getCAsLocation)
-from DIRAC.Core.Security.VOMSService import (_processListReturn,
-                                             _processListDictReturn)
 from GridPPDIRAC.Core.Security.HTTPSClientUtils import HTTPSClientCertTransport
+
+def _processListReturn( soapReturn ):
+  data = []
+  for entry in soapReturn:
+    data.append( str( entry ) )
+  return data
+
+def _processListDictReturn( soapReturn ):
+  data = []
+  for entry in soapReturn:
+    entryData = {}
+    for info in entry:
+      entryData[ info[0] ] = str( info[1] )
+    data.append( entryData )
+return data
 
 
 class MultiVOMSService(object):
