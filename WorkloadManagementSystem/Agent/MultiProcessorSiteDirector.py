@@ -22,8 +22,6 @@ class MultiProcessorSiteDirector( OriginalMPSiteDirector ):
   def _getPilotOptions( self, queue, pilotsToSubmit, **kwargs ):
     """ Prepare pilot options
     """
-    print "In getPilotOptions"
-    print "Params: %s" % str(kwargs)
     pilotOptions, pilotsToSubmit = OriginalMPSiteDirector._getPilotOptions(self, queue, pilotsToSubmit)
     # Get the module specific options
     if self.extraOptions:
@@ -31,6 +29,6 @@ class MultiProcessorSiteDirector( OriginalMPSiteDirector ):
     processors = kwargs.pop('processors', 1)
     if processors > 0:
       pilotOptions.append( '--maxNumberOfProcessors %u' % processors )
-    print "EXIT: %s" % pilotOptions
+      pilotOptions.append( '--requiredTag %uProcessors' % processors )
     return [pilotOptions, pilotsToSubmit]
 
