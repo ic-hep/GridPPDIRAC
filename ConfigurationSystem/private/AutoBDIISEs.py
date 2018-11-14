@@ -196,8 +196,9 @@ def update_ses(considered_vos=None, cfg_base_path='/Resources/StorageElements',
 
     cs = ConfigurationSystem()
     for se, se_info in sorted(se_dict.iteritems()):
-        if banned_ses is not None and se in banned_ses:
-            gLogger.info("Skipping banned SE: %s" % se)
+        host = se_info['host']
+        if banned_ses is not None and host in banned_ses:
+            gLogger.info("Skipping banned SE: %s" % host)
             continue
         site_path = os.path.join(cfg_base_path, se)
         vos = se_info.get('vos', set())
@@ -205,7 +206,6 @@ def update_ses(considered_vos=None, cfg_base_path='/Resources/StorageElements',
         if considered_vos is not None and not vos.intersection(considered_vos):
             continue
 
-        host = se_info['host']
         cs.add(site_path, 'BackendType', max(se_info['GlueSEImplementationName']))
         cs.add(site_path, 'Description', max(se_info.get('GlueSEName', [None])))
         cs.add(site_path, 'Host', host)
