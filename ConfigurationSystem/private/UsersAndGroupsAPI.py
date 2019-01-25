@@ -223,6 +223,10 @@ class UsersAndGroupsAPI(object):
 
             user['Groups'] = sorted(new_groups)
             user['Email'] = ', '.join(sorted(user.get('Email', [])))
+            # make voms server input vaguely compliant with ITU X520
+            user['DN'] = user['DN'].replace("/STREET=", "/street=")
+            user['DN'] = user['DN'].replace("/PostalCode=", "/postalCode=")
+
             result = csapi.modifyUser(user_nick, user,
                                       createIfNonExistant=True)
             if not result['OK']:
