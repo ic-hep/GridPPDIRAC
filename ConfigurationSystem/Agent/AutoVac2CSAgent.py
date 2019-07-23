@@ -108,6 +108,9 @@ class AutoVac2CSAgent(AgentModule):
             # Resources
             sitename = service.get('SITENAME')
             hostname = service.get('HOSTNAME')
+            nodestatus = service.get('IN_PRODUCTION', 'N')
+            if nodestatus != 'Y':
+                continue
             country_code = AutoVac2CSAgent.extract_cc(hostname) or country_default
             if sitename is None or hostname is None:
                 self.log.warn("Missing sitename or hostname for service:\n%s" % pformat(service))
