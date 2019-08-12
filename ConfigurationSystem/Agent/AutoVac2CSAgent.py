@@ -124,7 +124,7 @@ class AutoVac2CSAgent(AgentModule):
             cfg_system.append_unique(site_path, 'CE', hostname)
             cfg_system.add(ce_path, 'CEType', site_path_prefix.capitalize())
             cfg_system.add(ce_path, 'Architecture', 'x86_64')
-            cfg_system.add(ce_path, 'OS', 'EL6')
+            cfg_system.add(ce_path, 'OS', 'EL7')
             cfg_system.add(ce_path, 'LastSeen', date.today().strftime('%d/%m/%Y'))
             cfg_system.add(queue_path, 'maxCPUTime',
                            AutoVac2CSAgent.max_cputime_map.get(site_path_prefix, 'Unknown'))
