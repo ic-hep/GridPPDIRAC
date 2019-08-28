@@ -29,6 +29,7 @@ class MultiProcessorSiteDirector( OriginalMPSiteDirector ):
     processors = kwargs.pop('processors', 1)
     if processors > 0:
       pilotOptions.append( '--maxNumberOfProcessors %u' % processors )
+      pilotOptions.append( '-o /Resources/Computing/CEDefaults/NumberOfProcessors=%u' % processors )
       pilotOptions.append( '--requiredTag %uProcessors' % processors )
     return [pilotOptions, pilotsToSubmit]
 
