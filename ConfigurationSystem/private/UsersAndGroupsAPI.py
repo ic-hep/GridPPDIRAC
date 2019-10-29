@@ -196,13 +196,22 @@ class UsersAndGroupsAPI(object):
             return ret
         currentUsers = ret['Value']
 
+        result = gConfig.getConfigurationTree("/Registry/Groups", "StaticUsers")
+        if not result['OK']:
+            gLogger.warn("Error retrieving static users for groups. "
+                         "No static users will be processed")
+        group_regex = re.compile(r"^/Registry/Groups/([^/]+)/StaticUsers$")
+        group_static_users = {group_regex.sub(r"\1", group): members
+                              for group, members in result.get("Value", {}).iteritems()}
+
         ## add groups before users as fails if user belongs
         ## to unknown group. use modify so if group already
-        ## exists, start by blanking it's users.
+        ## exists, start by blanking it's users (or setting to the static list)
         managed_groups = set(vomsMapping.itervalues()) - dead_VO_groups
         for group in managed_groups:
             #csapi.addGroup(group, {'Users': ''})
-            csapi.modifyGroup(group, {'Users': ''}, createIfNonExistant=True)
+            csapi.modifyGroup(group, {'Users': group_static_users.get(group, '')},
+                              createIfNonExistant=True)
 
         obsoleteUsers = set()
         for user in usersInVOMS.itervalues():
