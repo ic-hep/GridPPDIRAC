@@ -49,6 +49,12 @@ class ConfigurationSystem(CSAPI):
             >>> cs = ConfigurationSystem()
             >>> cs.add('/Registry', 'DefaultGroup', 'dteam_user')
         """
+        if isinstance(new_value, dict):
+            section = cfgPath(section, option)
+            for option, val in new_value.iteritems():
+                self.add(section, option, val)
+            return
+
         if isinstance(new_value, (tuple, list, set, GeneratorType)):
             new_value = ', '.join(sorted(map(str, new_value)))
         else:
