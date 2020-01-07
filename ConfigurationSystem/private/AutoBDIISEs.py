@@ -149,7 +149,8 @@ def ldapsearch_bdii_ses(address=('lcg-bdii.cern.ch', 2170),
                                     filterstr="(&(objectClass=GlueSEAccessProtocol)"
                                     "(GlueChunkKey=*)"
                                     "(GlueSEAccessProtocolEndpoint=*)"
-                                    "(GlueSEAccessProtocolType=Root))")
+                                    "(|(GlueSEAccessProtocolType=Root)"
+                                    "(GlueSEAccessProtocolType=Xroot)))")
     xrootport_dict = {}
     for _, xrootport in xrootports:
         # this loop and one in voinfo could be condensed to urlparse(endpoint).hostname probably
