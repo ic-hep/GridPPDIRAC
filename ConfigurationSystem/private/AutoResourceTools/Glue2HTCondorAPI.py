@@ -80,7 +80,7 @@ def get_endpoints(ldap_conn, domain_id, service_id):
                                                   "(GLUE2DomainID:dn:=%s)"
                                                   "(GLUE2EndpointURL=*))" % (
                                                   service_id, domain_id)):  # * forces the field to exist
-        endpoints.add(endpoint_ce_regex.sub(r"\1", attrs["GLUE2EndpointURL"]))
+        endpoints.add(endpoint_ce_regex.sub(r"\1", attrs["GLUE2EndpointURL"][0]))
     return endpoints
 
 
