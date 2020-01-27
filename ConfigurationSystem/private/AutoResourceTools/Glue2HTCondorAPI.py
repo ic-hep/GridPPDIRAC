@@ -4,6 +4,7 @@ import re
 import shlex
 import subprocess
 from collections import defaultdict
+from datetime import date
 
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
 from ConfigurationSystem import ConfigurationSystem
@@ -164,6 +165,7 @@ def _get_htcondor_ces(ldap_conn):
                                                          "wnTmpDir": '.',
                                                          "SI00": 3100,
                                                          "MaxRAM": 4096,
+                                                         "LastSeen": date.today().strftime('%d/%m/%Y'),
                                                          "UseLocalSchedd": False,
                                                          "DaysToKeepLogs": 2,
                                                          "Queues": {'-'.join((ce, 'condor')): {"SI00": 3100,
