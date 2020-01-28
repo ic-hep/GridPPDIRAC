@@ -187,13 +187,13 @@ class Queue(WritableMixin, namedtuple('Queue', ('DiracName',
 
         # MaxTotalJobs in dirac is (running jobs (i.e. hardware) + waiting jobs)
         max_total_jobs_slots = int(queue_info.get('GlueCEInfoTotalCPUs', 0)) or ce_logical_cpus
-
+        # changed MaxWaitingJobs from 2*max_total_jobs_slots after complaints about too many pilot jobs
         return super(Queue, cls).__new__(cls,
                                          DiracName=queue,
                                          VO=', '.join(sorted(vo)),
                                          SI00=si00,
                                          maxCPUTime=max_cpu_time,
-                                         MaxTotalJobs=4*max_total_jobs_slots,
-                                         MaxWaitingJobs=2*max_total_jobs_slots)
+                                         MaxTotalJobs=3*max_total_jobs_slots,
+                                         MaxWaitingJobs=max_total_jobs_slots)
 
 __all__ = ('Site', 'CE', 'Queue')
