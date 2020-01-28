@@ -21,7 +21,8 @@ from DIRAC.FrameworkSystem.Client.NotificationClient import NotificationClient
 from GridPPDIRAC.ConfigurationSystem.private.AutoBDIISEs import update_ses
 from GridPPDIRAC.ConfigurationSystem.private.AddResourceAPI import (update_ces,
                                                                     remove_old_ces,
-                                                                    find_old_ses)
+                                                                    find_old_ses,
+                                                                    find_htcondor_ces)
 
 
 __RCSID__ = "$Id$"
@@ -86,6 +87,13 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
                            max_processors=self.am_getOption('FixedMaxProcessors', None))
             except Exception:
                 self.log.exception("Error while running check for new CEs")
+
+            # Update HTCondor CEs
+            ##############################
+            try:
+                find_htcondor_ces(bdii_host=self.bdii_host)
+            except Exception:
+                self.log.exception("Error while running check for new HTCondor CEs")
 
         # Remove old CEs with last_seen > threshold
         ##############################
