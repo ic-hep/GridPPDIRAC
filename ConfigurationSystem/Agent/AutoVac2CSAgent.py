@@ -111,6 +111,13 @@ class AutoVac2CSAgent(AgentModule):
             nodestatus = service.get('IN_PRODUCTION', 'N')
             if nodestatus != 'Y':
                 continue
+            # Try to use OS from GOC DB if defined
+            raw_host_os = service.get('HOST_OS', 'EL7')
+            os_match = re.match(r'[A-Za-z]([0-9])$', raw_host_os)
+            if os_match:
+              host_os = 'EL%s' % os_match.group(1)
+            else:
+              host_os = 'EL7'
             country_code = AutoVac2CSAgent.extract_cc(hostname) or country_default
             if sitename is None or hostname is None:
                 self.log.warn("Missing sitename or hostname for service:\n%s" % pformat(service))
@@ -124,7 +131,7 @@ class AutoVac2CSAgent(AgentModule):
             cfg_system.append_unique(site_path, 'CE', hostname)
             cfg_system.add(ce_path, 'CEType', site_path_prefix.capitalize())
             cfg_system.add(ce_path, 'Architecture', 'x86_64')
-            cfg_system.add(ce_path, 'OS', 'EL7')
+            cfg_system.add(ce_path, 'OS', host_os)
             cfg_system.add(ce_path, 'LastSeen', date.today().strftime('%d/%m/%Y'))
             cfg_system.add(queue_path, 'maxCPUTime',
                            AutoVac2CSAgent.max_cputime_map.get(site_path_prefix, 'Unknown'))
