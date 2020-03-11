@@ -113,7 +113,7 @@ class AutoVac2CSAgent(AgentModule):
                 continue
             # Try to use OS from GOC DB if defined
             raw_host_os = service.get('HOST_OS', 'EL7')
-            os_match = re.match(r'[A-Za-z]([0-9])$', raw_host_os)
+            os_match = re.match(r'.*[A-Za-z]([0-9])$', raw_host_os)
             if os_match:
               host_os = 'EL%s' % os_match.group(1)
             else:
