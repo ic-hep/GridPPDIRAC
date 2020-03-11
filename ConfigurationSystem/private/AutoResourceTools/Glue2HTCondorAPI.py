@@ -204,6 +204,7 @@ def update_htcondor_ces(bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170)):
     for (site, _), ce_info in sorted(_get_htcondor_ces(ldap_conn).iteritems()):
         for ce, info in ce_info.iteritems():
             site_path = '.'.join(('LCG', site, _get_country_code(ce)))
+            cfg_system.append_unique(cfgPath(sites_root, site_path), "CE", ce)
             for option, value in info.iteritems():
                 cfg_system.add(cfgPath(sites_root, site_path, "CEs", ce), option, value)
     cfg_system.commit()
