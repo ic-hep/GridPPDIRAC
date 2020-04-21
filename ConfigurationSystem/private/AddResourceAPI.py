@@ -9,7 +9,30 @@ from .AutoResourceTools.ConfigurationSystem import ConfigurationSystem
 from .AutoResourceTools.SETypes import SE
 from .AutoResourceTools.CETypes import Site
 from .AutoResourceTools.Glue2HTCondorAPI import update_htcondor_ces
+from .AutoResourceTools.Glue2ARCAPI import update_arc_ces
 
+def find_arc_ces(bdii_host="topbdii.grid.hep.ph.ic.ac.uk:2170"):
+    """
+    Find and add all ARC CEs defined using Glue2.
+
+    Args:
+        bdii_host (str): The BDII host in format <hostname>:<port>
+
+    Raises:
+        ValueError: If the BDII host str cannot be split to it's two components (hostname and port).
+                    Also if the port part cannot be cast to an integer.
+    """
+    host = bdii_host.rsplit(':', 1)
+    if not len(host) == 2:
+        msg = "Host is expected to be of type str in format 'hostname:port'"
+        gLogger.error(msg)
+        raise ValueError(msg)
+    try:
+        host[1] = int(host[1])
+    except ValueError:
+        gLogger.error("Could not cast port '%s' to type int" % host[1])
+        raise
+    update_arc_ces(bdii_host=host)
 
 def find_htcondor_ces(bdii_host="topbdii.grid.hep.ph.ic.ac.uk:2170"):
     """
