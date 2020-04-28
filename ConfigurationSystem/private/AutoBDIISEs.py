@@ -8,10 +8,10 @@ from collections import Counter
 from datetime import date
 from urlparse import urlparse
 
-import ldap
 from DIRAC import gLogger
 from DIRAC.Core.Base import Script
 from GridPPDIRAC.ConfigurationSystem.private.AutoResourceTools.ConfigurationSystem import ConfigurationSystem
+from .AutoResourceTools.ldaptools import MockLdap as ldap
 
 VO_REGEX = re.compile(r'^VO:\s*(?P<voname>[\w.-]+)')
 

@@ -8,68 +8,15 @@ from datetime import date
 
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
 from ConfigurationSystem import ConfigurationSystem
+from .ldaptools import in_, MockLdap as ldap
 # from .AutoResourceTools.ConfigurationSystem import ConfigurationSystem
+
 
 endpoint_ce_regex = re.compile(r"^(?:condor|https)://([^:]+):\d+/?$")
 dn_ce_regex = re.compile(r"^.*GLUE2ServiceID=([^,:]+)(?::[0-9]+)?,.*$")
 dn_site_regex = re.compile(r"^.*GLUE2DomainID=([^,]+),.*$")
 cc_regex = re.compile(r'\.([a-zA-Z]{2})$')
 
-
-# ########################################################################################
-
-
-class MockLdap(object):
-    """Mock of the ldap connection object."""
-
-    entry_regex = re.compile(r"^dn: ([^\n]*)$\n(.*?)$(?=^\s*$)", re.MULTILINE | re.DOTALL)
-    option_regex = re.compile(r"(^[^:]+): (.*)$", re.MULTILINE)
-    SCOPE_SUBTREE = None
-
-    def __init__(self, hostname, port):
-        self._host = ':'.join((hostname, str(port)))
-
-    @classmethod
-    def open(cls, hostname, port):
-        """Open connection mock."""
-        return cls(hostname, port)
-
-    def search_s(self, base, filterstr, scope=None):
-        """
-        Mimic the return from the ldap search_s API as not available in DiracOS.
-
-        Args:
-            base (str): base
-            filterstr (str): filters
-            scope (*): unused at this point
-
-        Returns:
-            list: list of (dn, attib_dict) for items matching the filterstr
-        """
-        cmd = "ldapsearch -x -LLL -o ldif-wrap=no -h {host} -b {base!r} {filterstr!r}"
-        stdout = subprocess.check_output(shlex.split(cmd.format(host=self._host,
-                                                                base=base,
-                                                                filterstr=filterstr)))
-        return [(dn, dict(MockLdap.option_regex.findall(options)))
-                for dn, options in MockLdap.entry_regex.findall(stdout)]
-
-# ########################################################################################
-
-
-try:
-    import ldap
-except ImportError:
-    ldap = MockLdap
-
-
-def in_(attrs, iterable):
-    if isinstance(attrs, basestring):
-        return "(|(" + ')('.join('='.join((attrs, value)) for value in iterable) + "))"
-
-    inner_join = lambda values: ''.join(("(&(",
-                                         ')('.join('='.join(filt) for filt in zip(attrs, values)),
-                                         "))"))
-    return "(|" + ''.join(inner_join(values) for values in iterable) + ")"
 
 def get_endpoints(ldap_conn, domain_id, service_id):
     endpoints = set()
