@@ -101,7 +101,7 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
             try:
                 find_arc_ces(bdii_host=self.bdii_host)
             except Exception:
-                self.log.exception("Error while running check for new HTCondor CEs")
+                self.log.exception("Error while running check for new ARC CEs")
 
         # Remove old CEs with last_seen > threshold
         ##############################
