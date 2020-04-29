@@ -7,8 +7,8 @@ from collections import defaultdict
 from datetime import date
 from itertools import islice
 
-#from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
-#from ConfigurationSystem import ConfigurationSystem
+from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
+from ConfigurationSystem import ConfigurationSystem
 # from .AutoResourceTools.ConfigurationSystem import ConfigurationSystem
 
 endpoint_ce_regex = re.compile(r"^(?:ldap|https)://([^:]+):\d+(?:/arex)?$")
