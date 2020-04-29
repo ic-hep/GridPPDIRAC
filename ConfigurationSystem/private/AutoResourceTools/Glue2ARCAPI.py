@@ -76,19 +76,6 @@ def in_(attrs, iterable):
                                          "))"))
     return "(|" + ''.join(inner_join(values) for values in iterable) + ")"
 
-def get_endpoints(ldap_conn, domain_id, service_id):
-    endpoints = set()
-    for dn, attrs in ldap_conn.search_s(base="o=glue",
-                                        scope=ldap.SCOPE_SUBTREE,
-                                        filterstr="(&(objectClass=GLUE2ComputingEndpoint)"
-                                                  "(GLUE2ServiceID:dn:=%s)"
-                                                  "(GLUE2DomainID:dn:=%s)"
-                                                  "(GLUE2EndpointURL=*))" % (
-                                                  service_id, domain_id)):  # * forces the field to exist
-        endpoints.add(endpoint_ce_regex.sub(r"\1", attrs["GLUE2EndpointURL"][0]))
-    return endpoints
-
-
 
 def _get_os_arch(ldap_conn, config_dict):
     os_map = {"centos": "EL"}
@@ -103,12 +90,9 @@ def _get_os_arch(ldap_conn, config_dict):
                                                   "(GLUE2ExecutionEnvironmentPlatform=*))"):
 
         # Maybe not mocked properly by mockldap
-        arch = attrs["GLUE2ExecutionEnvironmentPlatform"][0].lower()
-        os_version = attrs["GLUE2ExecutionEnvironmentOSVersion"][0]
-        os = attrs["GLUE2ExecutionEnvironmentOSName"][0].lower()
+        os = attrs["GLUE2ExecutionEnvironmentOSName"].lower()
 #        arch = attrs["GLUE2ExecutionEnvironmentPlatform"].lower()
 #        os_version = attrs["GLUE2ExecutionEnvironmentOSVersion"]
-#        os = attrs["GLUE2ExecutionEnvironmentOSName"].lower()
 #        os = os_map.get(os, os) + os_version
         os = "EL7"  # This is a temporary fix for above as no standard yet
 
@@ -116,9 +100,8 @@ def _get_os_arch(ldap_conn, config_dict):
         for ce, info in config_dict[site].iteritems():
             current_arch = info.get("architecture", '')
             current_os = info.get("OS", '')
-            if os > current_os or arch > current_arch:
-                info["architecture"] = arch
-                info["OS"] = os
+            info["architecture"] = "x86_64"
+            info["OS"] = os
     return config_dict
 
 
@@ -202,7 +185,7 @@ def _get_queue_prefix(ldap_conn, config_dict):
                                                       config_dict) +
                                                   "(GLUE2ManagerProductName=*))"):
         site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
-        queue_prefix[site] = '-'.join(("nordugrid", attrs.get("GLUE2ManagerProductName", ["unknown"])))
+        queue_prefix[site] = '-'.join(("nordugrid", attrs.get("GLUE2ManagerProductName", "unknown")))
     return queue_prefix
 
 
