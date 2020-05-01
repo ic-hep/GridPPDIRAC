@@ -6,7 +6,7 @@ from DIRAC import gConfig
 from .utils import WritableMixin
 
 
-class NotIncludedError(Excpetion):
+class NotIncludedError(Exception):
     pass
 
 
