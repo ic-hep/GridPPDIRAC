@@ -40,7 +40,7 @@ class WritableMixin(object):
             elif isinstance(value, dict):
                 for key, val in value.iteritems():
                     cfg_system.add(cfgPath(path, option), key, val)
-            elif value is not None:
+            elif value:  # exclude None and empty string
                 cfg_system.add(path, option, value)
 
 

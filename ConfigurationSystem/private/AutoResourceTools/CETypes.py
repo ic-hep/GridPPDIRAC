@@ -43,8 +43,8 @@ class Site(WritableMixin, namedtuple('Site', ('DiracName',
                    country_code = Site.extract_cc(ce) or country_default
 
                try:
-                   ce_list.add(ce)
                    ces.append(CE(ce, ce_info, max_processors))
+                   ce_list.add(ce)
                except NotIncludedError:
                     pass
 

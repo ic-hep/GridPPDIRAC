@@ -79,6 +79,7 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
         # Update CEs
         ##############################
         if self.processCEs:
+            self.log.notice("Starting Glue1 CE processing")
             try:
                 update_ces(voList=self.voName,
                            host=self.bdii_host,
@@ -91,6 +92,7 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
 
             # Update HTCondor CEs
             ##############################
+            self.log.notice("Processing HTCondor Glue2 CEs")
             try:
                 find_htcondor_ces(bdii_host=self.bdii_host)
             except Exception:
@@ -98,6 +100,7 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
 
             # Update ARC CEs
             ##############################
+            self.log.notice("Processing ARC Glue2 CEs")
             try:
                 find_arc_ces(bdii_host=self.bdii_host)
             except Exception:
