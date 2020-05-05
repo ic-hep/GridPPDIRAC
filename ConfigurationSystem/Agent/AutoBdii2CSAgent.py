@@ -56,7 +56,7 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
         """
         self.domain = self.am_getOption('Domain', AutoBdii2CSAgent.domain)
         self.country_default = self.am_getOption('CountryCodeDefault', AutoBdii2CSAgent.country_default)
-        self.bdii_host = self.am_getOption('BDIIHost', None)
+        self.bdii_host = self.am_getOption('BDIIHost', "topbdii.grid.hep.ph.ic.ac.uk:2170")
         self.removeOldCEs = self.am_getOption('RemoveOldCEs', True)
         self.ce_removal_threshold = self.am_getOption('CERemovalThreshold', 5)
         self.banned_ces = self.am_getOption('BannedCEs', [])
