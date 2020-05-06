@@ -152,7 +152,6 @@ class ConfigurationSystem(CSAPI):
                                  self._append_unique_dict.iteritems()):
             section, option = path.rsplit('/', 1)
             self.add(section, option, value)
-            self._num_changes += 1
 
         result = CSAPI.commit(self)
         if not result['OK']:
