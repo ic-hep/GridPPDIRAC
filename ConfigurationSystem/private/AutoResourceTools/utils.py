@@ -40,6 +40,8 @@ class WritableMixin(object):
             elif isinstance(value, dict):
                 for key, val in value.iteritems():
                     cfg_system.add(cfgPath(path, option), key, val)
+            elif isinstance(value, set):
+                cfg_system.append_unique(path, option, sorted(value))
             elif value:  # exclude None and empty string
                 cfg_system.add(path, option, value)
 

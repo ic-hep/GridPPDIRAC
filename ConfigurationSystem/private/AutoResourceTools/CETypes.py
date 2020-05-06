@@ -58,8 +58,8 @@ class Site(WritableMixin, namedtuple('Site', ('DiracName',
                                         Coordinates=':'.join((site_info_lst[0].get('GlueSiteLongitude').strip(),
                                                               site_info_lst[0].get('GlueSiteLatitude').strip())),
                                         Mail=site_info_lst[0].get('GlueSiteSysAdminContact').replace('mailto:', '').strip(),
-                                        CE=', '.join(sorted(ce_list)),
-                                        SE=', '.join(sorted(se_list)))
+                                        CE=ce_list,
+                                        SE=se_list)
 
     @classmethod
     def extract_cc(cls, ce, cc_mappings=None, cc_regex=None):
