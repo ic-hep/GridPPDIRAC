@@ -131,7 +131,6 @@ def _get_arc_ces(ldap_conn):
         arc_ces[(domain_id, service_id)][dn_ce2_regex.subn(r"\1", dn)[0]] = {"CEType": "ARC",
                                                  "SubmissionMode": "Direct",
                                                  "wnTmpDir": '.',
-                                                 "SI00": 3100,
                                                  "HostRAM": 4096,
                                                  "MaxProcessors": 8,
                                                  "LastSeen": date.today().strftime('%d/%m/%Y'),
@@ -187,6 +186,7 @@ def _get_si00(ldap_conn, config_dict):
         ce = dn_ce2_regex.sub(r"\1", dn)
         si00 = attrs["GLUE2BenchmarkValue"]
         config_dict.get(site, {}).get(ce, {})["SI00"] = si00
+    return config_dict
 
 def _get_queue_prefix(ldap_conn, config_dict):
     queue_prefix = {}
@@ -221,10 +221,13 @@ def _get_queues(ldap_conn, config_dict):
         queue_name = '-'.join((queue_prefix.get((domain_id, service_id), ''),
                                attrs["GLUE2ComputingShareMappingQueue"]))
         queues_dict[domain_id, service_id, queue_id] = queue_name
+        si00 = config_dict.get((domain_id, service_id), {})\
+                          .get(ce, {})\
+                          .get("SI00", 0)
         config_dict.get((domain_id, service_id), {})\
                    .get(ce, {})\
                    .get('Queues', {})[queue_name] = {"VO": set(),
-                                                     "SI00": 0,
+                                                     "SI00": si00,
                                                      "maxCPUTime": maxCPUTime,
                                                      "MaxTotalJobs": 2 * maxWaitingJobs,
                                                      "MaxWaitingJobs": maxWaitingJobs}
