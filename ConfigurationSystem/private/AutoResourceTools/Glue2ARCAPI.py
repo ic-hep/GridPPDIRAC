@@ -185,7 +185,7 @@ def _get_si00(ldap_conn, config_dict):
                                         "(GLUE2BenchmarkValue=*))"):
         site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
         ce = dn_ce2_regex.sub(r"\1", dn)
-        si00 = int(attrs["GLUE2BenchmarkValue"])
+        si00 = attrs["GLUE2BenchmarkValue"]
         config_dict.get(site, {}).get(ce, {})["SI00"] = si00
 
 def _get_queue_prefix(ldap_conn, config_dict):
