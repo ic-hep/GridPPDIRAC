@@ -39,9 +39,9 @@ def ldapsearch_bdii_ses(address=('lcg-bdii.cern.ch', 2170),
                              "(GlueChunkKey=*))")
     sa_dict = {}
     for _, sa in sorted(sas):
-        se = max(sa['GlueChunkKey'], key=len).replace('GlueSEUniqueID=', '')
+        se = sa['GlueChunkKey'].replace('GlueSEUniqueID=', '')
         if 'GlueSAAccessLatency' in sa:
-            latency = latency_mapping.get(max(sa['GlueSAAccessLatency'], key=len).lower(),
+            latency = latency_mapping.get(sa['GlueSAAccessLatency'].lower(),
                                           'disk')
         else:
             latency = 'disk'
@@ -56,10 +56,10 @@ def ldapsearch_bdii_ses(address=('lcg-bdii.cern.ch', 2170),
                               "(GlueServiceVersion=2*))")
     srm_dict = {}
     for key, srm in sorted(srms):
-        if 'Mds-Vo-name=%s' % max(srm['GlueForeignKey'], key=len).replace('GlueSiteUniqueID=', '')\
+        if 'Mds-Vo-name=%s' % srm['GlueForeignKey'].replace('GlueSiteUniqueID=', '')\
            not in key:
             continue
-        se = urlparse(max(srm['GlueServiceEndpoint'], key=len)).hostname
+        se = urlparse(srm['GlueServiceEndpoint']).hostname
         if se in srm_dict:
             gLogger.warn("SE '%s' already in SRM dict so will not be added again" % se)
             continue
@@ -100,12 +100,12 @@ def ldapsearch_bdii_ses(address=('lcg-bdii.cern.ch', 2170),
     se_dict = {}
     dirac_name_counter = Counter()
     for key, se in sorted(ses):
-        bdii_name = max(se['GlueForeignKey'], key=len).replace('GlueSiteUniqueID=', '')
+        bdii_name = se['GlueForeignKey'].replace('GlueSiteUniqueID=', '')
         if 'Mds-Vo-name=%s' % bdii_name not in key:
             continue
 
         # attach DIRAC name and VOs
-        host = max(se['GlueSEUniqueID'], key=len)
+        host = se['GlueSEUniqueID']
         se['host'] = host
         srm_vos = sa_dict.get(host, {}).get('GlueSAAccessControlBaseRule', [])
         latency_dict = sa_dict.get(host, {})
@@ -154,11 +154,12 @@ def ldapsearch_bdii_ses(address=('lcg-bdii.cern.ch', 2170),
     xrootport_dict = {}
     for _, xrootport in xrootports:
         # this loop and one in voinfo could be condensed to urlparse(endpoint).hostname probably
-        for key in xrootport['GlueChunkKey']:
-            if 'GlueSEUniqueID=' in key:
-                se = key.replace('GlueSEUniqueID=', '')
-                break
-        port = urlparse(xrootport.get('GlueSEAccessProtocolEndpoint', '')[0]).port
+#        for key in xrootport['GlueChunkKey']:
+        key = xrootport['GlueChunkKey']
+        if 'GlueSEUniqueID=' in key:
+            se = key.replace('GlueSEUniqueID=', '')
+            break
+        port = urlparse(xrootport.get('GlueSEAccessProtocolEndpoint', '')).port
         if port is not None:
             xrootport_dict.setdefault(se, set()).add(port)
 
@@ -171,16 +172,17 @@ def ldapsearch_bdii_ses(address=('lcg-bdii.cern.ch', 2170),
                                  "(GlueVOInfoPath=*))")
     voinfo_dict = {}
     for _, voinfo in voinfos:
-        for key in voinfo['GlueChunkKey']:
-            if 'GlueSEUniqueID=' in key:
-                se = key.replace('GlueSEUniqueID=', '')
-                break
+#        for key in voinfo['GlueChunkKey']:
+        key = voinfo['GlueChunkKey']
+        if 'GlueSEUniqueID=' in key:
+            se = key.replace('GlueSEUniqueID=', '')
+            break
 
-        vo = voinfo['GlueVOInfoAccessControlBaseRule'][0]
+        vo = voinfo['GlueVOInfoAccessControlBaseRule']
         if vo.startswith('VO:'):
             voinfo_dict.setdefault(se, {})\
                        .setdefault(vo.replace('VO:', ''), set())\
-                       .add(voinfo['GlueVOInfoPath'][0])
+                       .add(voinfo['GlueVOInfoPath'])
     for se, vo_info in voinfo_dict.iteritems():
         vo_info['common_path'] = os.path.dirname(
             os.path.commonprefix([i if i.endswith(os.sep) else i + os.sep
