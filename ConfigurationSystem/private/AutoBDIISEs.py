@@ -131,9 +131,7 @@ def ldapsearch_bdii_ses(address=('lcg-bdii.cern.ch', 2170),
             if xroot_ap_index:
                 se['xroot_ap_index'] = xroot_ap_index
             se['vos'] = set(VO_REGEX.match(rule).group('voname') for rule in
-                            (srm_vos or
-                             chain.from_iterable(sa.get('GlueSAAccessControlBaseRule', [])
-                                                 for sa in sas))
+                            (srm_vos or [sa.get('GlueSAAccessControlBaseRule', '') for sa in sas])
                             if VO_REGEX.match(rule))
             if dirac_name in se_dict:
                 gLogger.warn("DIRAC name '%s' already in dict, won't add it again" % dirac_name)
@@ -208,12 +206,11 @@ def update_ses(considered_vos=None, cfg_base_path='/Resources/StorageElements',
         # only consider certain vos.
         if considered_vos is not None and not vos.intersection(considered_vos):
             continue
-
-        cs.add(site_path, 'BackendType', max(se_info['GlueSEImplementationName']))
-        cs.add(site_path, 'Description', max(se_info.get('GlueSEName', [None])))
+        cs.add(site_path, 'BackendType', se_info['GlueSEImplementationName'])
+        cs.add(site_path, 'Description', se_info.get('GlueSEName', ''))
         cs.add(site_path, 'Host', host)
         cs.add(site_path, 'LastSeen', date.today().strftime('%d/%m/%Y'))
-        cs.add(site_path, 'TotalSize', max(se_info.get('GlueSETotalOnlineSize', ['Unknown'])))
+        cs.add(site_path, 'TotalSize', se_info.get('GlueSETotalOnlineSize', 'Unknown'))
         cs.add(site_path, 'VO', vos)
 
         # Get access protocols
@@ -229,7 +226,7 @@ def update_ses(considered_vos=None, cfg_base_path='/Resources/StorageElements',
                 if xroot_ap_index is not None:
                     srm_ap_index = xroot_ap_index + 1
             ap_path = os.path.join(site_path, 'AccessProtocol.%s' % srm_ap_index)
-            port = urlparse(srm.get('GlueServiceEndpoint', [''])[0]).port
+            port = urlparse(srm.get('GlueServiceEndpoint', '')).port
             cs.add(ap_path, 'Access', 'remote')
             cs.add(ap_path, 'Host', host)
             cs.add(ap_path, 'Path', common_path)
