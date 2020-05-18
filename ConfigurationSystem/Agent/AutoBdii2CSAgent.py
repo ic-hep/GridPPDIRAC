@@ -99,7 +99,7 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
             # Update ARC CEs
             ##############################
             try:
-                find_arc_ces(bdii_host=self.bdii_host)
+                find_arc_ces(voList=self.voName, bdii_host=self.bdii_host)
             except Exception:
                 self.log.exception("Error while running check for new ARC CEs")
 
