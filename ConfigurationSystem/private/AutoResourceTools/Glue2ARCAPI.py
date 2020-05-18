@@ -115,8 +115,6 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
     cfg_system = ConfigurationSystem()
     for (site, _), ce_info in sorted(_get_arc_ces(ldap_conn).iteritems()):
         for ce, info in ce_info.iteritems():
-            site_path = '.'.join(('LCG', site, _get_country_code(ce)))
-            cfg_system.append_unique(cfgPath(sites_root, site_path), "CE", ce)
             if vo_list is not None:
                 logging.debug("Filtering out unwanted VOs from CE %s", ce)
                 # Filter VOs. first part of if is clever ruse to update in a comprehension (always returns None)
@@ -125,6 +123,8 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
             if not info["Queues"]:
                 logging.warning("Skipping CE %s as it has no queues that support our VOs", ce)
                 continue
+            site_path = '.'.join(('LCG', site, _get_country_code(ce)))
+            cfg_system.append_unique(cfgPath(sites_root, site_path), "CE", ce)
             for option, value in info.iteritems():
                 cfg_system.add(cfgPath(sites_root, site_path, "CEs", ce), option, value)
     cfg_system.commit()
