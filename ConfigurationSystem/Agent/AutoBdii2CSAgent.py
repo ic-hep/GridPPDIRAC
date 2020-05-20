@@ -92,7 +92,7 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
             # Update HTCondor CEs
             ##############################
             try:
-                find_htcondor_ces(bdii_host=self.bdii_host)
+                find_htcondor_ces(voList=self.voName, bdii_host=self.bdii_host)
             except Exception:
                 self.log.exception("Error while running check for new HTCondor CEs")
 

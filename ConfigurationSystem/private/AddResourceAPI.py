@@ -34,7 +34,7 @@ def find_arc_ces(voList, bdii_host="topbdii.grid.hep.ph.ic.ac.uk:2170"):
         raise
     update_arc_ces(vo_list=voList, bdii_host=host)
 
-def find_htcondor_ces(bdii_host="topbdii.grid.hep.ph.ic.ac.uk:2170"):
+def find_htcondor_ces(voList, bdii_host="topbdii.grid.hep.ph.ic.ac.uk:2170"):
     """
     Find and add all HTCondor CEs defined using Glue2.
 
@@ -55,7 +55,7 @@ def find_htcondor_ces(bdii_host="topbdii.grid.hep.ph.ic.ac.uk:2170"):
     except ValueError:
         gLogger.error("Could not cast port '%s' to type int" % host[1])
         raise
-    update_htcondor_ces(bdii_host=host)
+    update_htcondor_ces(vo_list=voList, bdii_host=host)
 
 
 
