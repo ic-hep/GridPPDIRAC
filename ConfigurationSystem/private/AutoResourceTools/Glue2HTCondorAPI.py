@@ -118,7 +118,8 @@ def _get_htcondor_ces(ldap_conn):
                                                          "LastSeen": date.today().strftime('%d/%m/%Y'),
                                                          "UseLocalSchedd": False,
                                                          "DaysToKeepLogs": 2,
-                                                         "Queues": {'-'.join((ce, 'condor')): {"SI00": 3100,
+                                                         "Queues": {'-'.join((ce, 'condor')): {"VO": set(),
+                                                                                               "SI00": 3100,
                                                                                                "MaxTotalJobs": 5000,  # 4 * (max_total_jobs or 1000),
                                                                                                "MaxWaitingJobs": 5000,  # 2 * (max_total_jobs or 1000),
                                                                                                "maxCPUTime": 7777}}}
