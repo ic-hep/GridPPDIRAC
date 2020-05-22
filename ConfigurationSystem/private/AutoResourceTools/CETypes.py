@@ -6,6 +6,10 @@ from DIRAC import gConfig
 from .utils import WritableMixin
 
 
+class NotIncludedError(Exception):
+    pass
+
+
 class Site(WritableMixin, namedtuple('Site', ('DiracName',
                                               'Name',
                                               'CEs',
@@ -38,8 +42,11 @@ class Site(WritableMixin, namedtuple('Site', ('DiracName',
                if country_code == country_default:
                    country_code = Site.extract_cc(ce) or country_default
 
-               ce_list.add(ce)
-               ces.append(CE(ce, ce_info, max_processors))
+               try:
+                   ces.append(CE(ce, ce_info, max_processors))
+                   ce_list.add(ce)
+               except NotIncludedError:
+                    pass
 
         se_list = set(se for se in gConfig.getSections('/Resources/StorageElements').get('Value', [])
                       if se.startswith(site))
@@ -51,8 +58,8 @@ class Site(WritableMixin, namedtuple('Site', ('DiracName',
                                         Coordinates=':'.join((site_info_lst[0].get('GlueSiteLongitude').strip(),
                                                               site_info_lst[0].get('GlueSiteLatitude').strip())),
                                         Mail=site_info_lst[0].get('GlueSiteSysAdminContact').replace('mailto:', '').strip(),
-                                        CE=', '.join(sorted(ce_list)),
-                                        SE=', '.join(sorted(se_list)))
+                                        CE=ce_list,
+                                        SE=se_list)
 
     @classmethod
     def extract_cc(cls, ce, cc_mappings=None, cc_regex=None):
@@ -96,6 +103,9 @@ class CE(WritableMixin, namedtuple('CE', ('DiracName',
         for queue, queue_info in sorted(ce_info.get('Queues', {}).iteritems()):
             queues.append(Queue(queue, queue_info, ce_logical_cpus, ce_si00))
             ce_type = queue_info.get('GlueCEImplementationName', '')
+
+        if ce_type == 'ARC-CE':
+            raise NotIncludedError("Excluding ARC CEs")
 
         num_cores = int(max_processors or ce_info.get('GlueHostArchitectureSMPSize', 1))
         # RAL HACKS.. cause T1, innit ? - for each CE either only allow EL6 or EL7 queue, plus a hack for SKA
