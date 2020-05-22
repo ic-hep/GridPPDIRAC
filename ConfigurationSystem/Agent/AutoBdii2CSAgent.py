@@ -94,7 +94,7 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
             ##############################
             self.log.notice("Processing HTCondor Glue2 CEs")
             try:
-                find_htcondor_ces(bdii_host=self.bdii_host)
+                find_htcondor_ces(voList=self.voName, bdii_host=self.bdii_host)
             except Exception:
                 self.log.exception("Error while running check for new HTCondor CEs")
 
@@ -102,7 +102,7 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
             ##############################
             self.log.notice("Processing ARC Glue2 CEs")
             try:
-                find_arc_ces(bdii_host=self.bdii_host)
+                find_arc_ces(voList=self.voName, bdii_host=self.bdii_host)
             except Exception:
                 self.log.exception("Error while running check for new ARC CEs")
 

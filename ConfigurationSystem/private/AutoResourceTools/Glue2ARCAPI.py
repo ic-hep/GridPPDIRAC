@@ -10,6 +10,8 @@ from itertools import islice
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
 from ConfigurationSystem import ConfigurationSystem
 # from .AutoResourceTools.ConfigurationSystem import ConfigurationSystem
+from .ldaptools import in_, MockLdap as ldap
+
 
 endpoint_ce_regex = re.compile(r"^(?:ldap|https)://([^:]+):\d+(?:/arex)?$")
 #dn_ce_regex = re.compile(r"^.*GLUE2ServiceID=(urn:ogf:ComputingService:[^,:]+:arex),.*$")
@@ -19,62 +21,6 @@ dn_ce2_regex = re.compile(r"^.*[,]?GLUE2ServiceID=(?:urn:ogf:ComputingService:)?
 dn_site_regex = re.compile(r"^.*GLUE2DomainID=([^,]+),.*$")
 cc_regex = re.compile(r'\.([a-zA-Z]{2})$')
 vo_regex = re.compile(r'^(?:vo:|VO:)?([^:]*)$')
-
-
-# ########################################################################################
-
-
-class MockLdap(object):
-    """Mock of the ldap connection object."""
-
-    entry_regex = re.compile(r"^dn: ([^\n]*)$\n(.*?)$(?=^\s*$)", re.MULTILINE | re.DOTALL)
-    option_regex = re.compile(r"(^[^:]+): (.*)$", re.MULTILINE)
-    SCOPE_SUBTREE = None
-
-    def __init__(self, hostname, port):
-        self._host = ':'.join((hostname, str(port)))
-
-    @classmethod
-    def open(cls, hostname, port):
-        """Open connection mock."""
-        return cls(hostname, port)
-
-    def search_s(self, base, filterstr, scope=None):
-        """
-        Mimic the return from the ldap search_s API as not available in DiracOS.
-
-        Args:
-            base (str): base
-            filterstr (str): filters
-            scope (*): unused at this point
-
-        Returns:
-            list: list of (dn, attib_dict) for items matching the filterstr
-        """
-        cmd = "ldapsearch -x -LLL -o ldif-wrap=no -h {host} -b {base!r} {filterstr!r}"
-        stdout = subprocess.check_output(shlex.split(cmd.format(host=self._host,
-                                                                base=base,
-                                                                filterstr=filterstr)))
-        return [(dn, dict(MockLdap.option_regex.findall(options)))
-                for dn, options in MockLdap.entry_regex.findall(stdout)]
-
-# ########################################################################################
-
-
-#try:
-#    import ldap
-#except ImportError:
-ldap = MockLdap
-
-
-def in_(attrs, iterable):
-    if isinstance(attrs, basestring):
-        return "(|(" + ')('.join('='.join((attrs, value)) for value in iterable) + "))"
-
-    inner_join = lambda values: ''.join(("(&(",
-                                         ')('.join('='.join(filt) for filt in zip(attrs, values)),
-                                         "))"))
-    return "(|" + ''.join(inner_join(values) for values in iterable) + ")"
 
 
 def _get_os_arch(ldap_conn, config_dict):
@@ -160,7 +106,7 @@ def _get_country_code(ce, default='xx', mapping=None):
     return default
 
 
-def update_arc_ces(bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170)):
+def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170)):
     """
     Update ARC CEs from BDII.
     """
@@ -169,6 +115,14 @@ def update_arc_ces(bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170)):
     cfg_system = ConfigurationSystem()
     for (site, _), ce_info in sorted(_get_arc_ces(ldap_conn).iteritems()):
         for ce, info in ce_info.iteritems():
+            if vo_list is not None:
+                logging.debug("Filtering out unwanted VOs from CE %s", ce)
+                # Filter VOs. first part of if is clever ruse to update in a comprehension (always returns None)
+                info["Queues"] = {key: val for key, val in info["Queues"].iteritems()
+                                  if (val.update(VO=val['VO'].intersection(vo_list)) or val['VO'])}
+            if not info["Queues"]:
+                logging.warning("Skipping CE %s as it has no queues that support our VOs", ce)
+                continue
             site_path = '.'.join(('LCG', site, _get_country_code(ce)))
             cfg_system.append_unique(cfgPath(sites_root, site_path), "CE", ce)
             for option, value in info.iteritems():
