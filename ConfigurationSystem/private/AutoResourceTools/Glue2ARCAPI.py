@@ -83,7 +83,6 @@ def _get_arc_ces(ldap_conn):
                                                  "UseLocalSchedd": False,
                                                  "DaysToKeepLogs": 2,
                                                  "Queues": {}}
-    arc_ces = _get_si00(ldap_conn, arc_ces)
     arc_ces = _get_queues(ldap_conn, arc_ces)
 #    arc_ces = _get_vos(ldap_conn, arc_ces)
     arc_ces = _get_os_arch(ldap_conn, arc_ces)
@@ -129,18 +128,6 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
                 cfg_system.add(cfgPath(sites_root, site_path, "CEs", ce), option, value)
     cfg_system.commit()
 
-def _get_si00(ldap_conn, config_dict):
-    for dn, attrs in ldap_conn.search_s(base="o=glue", scope=ldap.SCOPE_SUBTREE,
-                                        filterstr="(&(objectClass=GLUE2Benchmark)" +
-                                        in_(("GLUE2DomainID:dn:",
-                                             "GLUE2ServiceID:dn:"),
-                                              config_dict) +
-                                        "(GLUE2BenchmarkValue=*))"):
-        site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
-        ce = dn_ce2_regex.sub(r"\1", dn)
-        si00 = attrs["GLUE2BenchmarkValue"]
-        config_dict.get(site, {}).get(ce, {})["SI00"] = si00
-    return config_dict
 
 def _get_queue_prefix(ldap_conn, config_dict):
     queue_prefix = {}
@@ -175,13 +162,10 @@ def _get_queues(ldap_conn, config_dict):
         queue_name = '-'.join((queue_prefix.get((domain_id, service_id), ''),
                                attrs["GLUE2ComputingShareMappingQueue"]))
         queues_dict[domain_id, service_id, queue_id] = queue_name
-        si00 = config_dict.get((domain_id, service_id), {})\
-                          .get(ce, {})\
-                          .get("SI00", 0)
         config_dict.get((domain_id, service_id), {})\
                    .get(ce, {})\
                    .get('Queues', {})[queue_name] = {"VO": set(),
-                                                     "SI00": si00,
+                                                     "SI00": 3100,
                                                      "maxCPUTime": maxCPUTime,
                                                      "MaxTotalJobs": 2 * maxWaitingJobs,
                                                      "MaxWaitingJobs": maxWaitingJobs}
