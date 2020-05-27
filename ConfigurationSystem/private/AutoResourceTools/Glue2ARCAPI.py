@@ -141,6 +141,16 @@ def _get_queue_prefix(ldap_conn, config_dict):
         queue_prefix[site] = '-'.join(("nordugrid", attrs.get("GLUE2ManagerProductName", "unknown")))
     return queue_prefix
 
+def _tidy_time(timeval):
+    """ Takes a time (usually a queue length) and tries to convert it to minutes.
+        This is done by anything < 500 is assumed to be hours.
+        Anything > 25000 is assumed to be seconds.
+    """
+    if timeval < 500:
+        return timeval * 60
+    if timeval > 25000:
+        return timeval / 60
+    return timeval
 
 def _get_queues(ldap_conn, config_dict):
 
@@ -156,8 +166,8 @@ def _get_queues(ldap_conn, config_dict):
                                               "(GLUE2ComputingShareMappingQueue=*))"):
         domain_id, service_id = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
         ce = dn_ce2_regex.sub(r"\1", dn)
-        maxCPUTime = attrs.get("GLUE2ComputingShareMaxCPUTime", 5940)
-        maxWaitingJobs = int(attrs.get("GLUE2ComputingShareMaxWaitingJobs", 5328))
+        maxCPUTime = attrs.get("GLUE2ComputingShareMaxCPUTime", 2940)
+        maxWaitingJobs = int(attrs.get("GLUE2ComputingShareMaxWaitingJobs", 5000))
         queue_id = attrs["GLUE2ShareID"]
         queue_name = '-'.join((queue_prefix.get((domain_id, service_id), ''),
                                attrs["GLUE2ComputingShareMappingQueue"]))
@@ -166,7 +176,7 @@ def _get_queues(ldap_conn, config_dict):
                    .get(ce, {})\
                    .get('Queues', {})[queue_name] = {"VO": set(),
                                                      "SI00": 3100,
-                                                     "maxCPUTime": maxCPUTime,
+                                                     "maxCPUTime": _tidy_time(maxCPUTime),
                                                      "MaxTotalJobs": 2 * maxWaitingJobs,
                                                      "MaxWaitingJobs": maxWaitingJobs}
     return _get_vos(ldap_conn, queues_dict, config_dict)
