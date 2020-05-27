@@ -168,6 +168,11 @@ def _get_queues(ldap_conn, config_dict):
         ce = dn_ce2_regex.sub(r"\1", dn)
         maxCPUTime = int(attrs.get("GLUE2ComputingShareMaxCPUTime", 2940))
         maxWaitingJobs = int(attrs.get("GLUE2ComputingShareMaxWaitingJobs", 5000))
+        # Some sites specifically advertise 0 for Max jobs
+        # We'll default this to "4444" so it still works, but we can easily see that
+        # it isn't the "5000" default.
+        if not maxWaitingJobs:
+            maxWaitingJobs = 4444
         queue_id = attrs["GLUE2ShareID"]
         queue_name = '-'.join((queue_prefix.get((domain_id, service_id), ''),
                                attrs["GLUE2ComputingShareMappingQueue"]))
