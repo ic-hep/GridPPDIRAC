@@ -22,7 +22,8 @@ from GridPPDIRAC.ConfigurationSystem.private.AutoBDIISEs import update_ses
 from GridPPDIRAC.ConfigurationSystem.private.AddResourceAPI import (update_ces,
                                                                     remove_old_ces,
                                                                     find_old_ses,
-                                                                    find_htcondor_ces)
+                                                                    find_htcondor_ces,
+                                                                    find_arc_ces)
 
 
 __RCSID__ = "$Id$"
@@ -55,7 +56,7 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
         """
         self.domain = self.am_getOption('Domain', AutoBdii2CSAgent.domain)
         self.country_default = self.am_getOption('CountryCodeDefault', AutoBdii2CSAgent.country_default)
-        self.bdii_host = self.am_getOption('BDIIHost', None)
+        self.bdii_host = self.am_getOption('BDIIHost', "topbdii.grid.hep.ph.ic.ac.uk:2170")
         self.removeOldCEs = self.am_getOption('RemoveOldCEs', True)
         self.ce_removal_threshold = self.am_getOption('CERemovalThreshold', 5)
         self.banned_ces = self.am_getOption('BannedCEs', [])
@@ -78,6 +79,7 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
         # Update CEs
         ##############################
         if self.processCEs:
+            self.log.notice("Starting Glue1 CE processing")
             try:
                 update_ces(voList=self.voName,
                            host=self.bdii_host,
@@ -90,10 +92,19 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
 
             # Update HTCondor CEs
             ##############################
+            self.log.notice("Processing HTCondor Glue2 CEs")
             try:
-                find_htcondor_ces(bdii_host=self.bdii_host)
+                find_htcondor_ces(voList=self.voName, bdii_host=self.bdii_host)
             except Exception:
                 self.log.exception("Error while running check for new HTCondor CEs")
+
+            # Update ARC CEs
+            ##############################
+            self.log.notice("Processing ARC Glue2 CEs")
+            try:
+                find_arc_ces(voList=self.voName, bdii_host=self.bdii_host)
+            except Exception:
+                self.log.exception("Error while running check for new ARC CEs")
 
         # Remove old CEs with last_seen > threshold
         ##############################
