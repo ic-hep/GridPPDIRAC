@@ -5,11 +5,11 @@ UsersAndGroupsAgent
 __RCSID__ = "$Id$"
 import os
 from DIRAC import S_OK
-from DIRAC.ConfigurationSystem.Agent.UsersAndGroups import UsersAndGroups
+from DIRAC.Core.Base.AgentModule import AgentModule
 from GridPPDIRAC.ConfigurationSystem.private.UsersAndGroupsAPI import UsersAndGroupsAPI
 
 
-class UsersAndGroupsAgent(UsersAndGroups):
+class UsersAndGroupsAgent(AgentModule):
     '''
     UsersAndGroupsAgent
 
