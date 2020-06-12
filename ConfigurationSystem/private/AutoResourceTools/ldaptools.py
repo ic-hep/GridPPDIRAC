@@ -46,8 +46,15 @@ class MockLdap(object):
         stdout = subprocess.check_output(shlex.split(cmd.format(host=self._host,
                                                                 base=base,
                                                                 filterstr=filterstr)))
-        return [(dn, dict(MockLdap.option_regex.findall(options)))
-                for dn, options in MockLdap.entry_regex.findall(stdout)]
+        ret = []
+        for dn, options in MockLdap.entry_regex.findall(stdout):
+            d = defaultdict(list)
+            for key, value in dict(MockLdap.option_regex.findall(options)):
+                d[key].append(value)
+            ret.append((dn, dict(d)))
+        return ret
+#        return [(dn, dict(MockLdap.option_regex.findall(options)))
+#                for dn, options in MockLdap.entry_regex.findall(stdout)]
 
 
 def in_(attrs, iterable):
