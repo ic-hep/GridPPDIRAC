@@ -4,6 +4,7 @@ import re
 import shlex
 import subprocess
 import warnings
+from collections import defaultdict
 
 
 __all__ = ("MockLdap", "in_")
@@ -49,7 +50,7 @@ class MockLdap(object):
         ret = []
         for dn, options in MockLdap.entry_regex.findall(stdout):
             d = defaultdict(list)
-            for key, value in dict(MockLdap.option_regex.findall(options)):
+            for key, value in MockLdap.option_regex.findall(options):
                 d[key].append(value)
             ret.append((dn, dict(d)))
         return ret
