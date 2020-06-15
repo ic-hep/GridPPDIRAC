@@ -35,8 +35,7 @@ def _get_os_arch(ldap_conn, config_dict):
                                                   "(GLUE2ExecutionEnvironmentOSVersion=*)"
                                                   "(GLUE2ExecutionEnvironmentPlatform=*))"):
 
-        # Maybe not mocked properly by mockldap
-        os = attrs["GLUE2ExecutionEnvironmentOSName"].lower()
+        os = attrs["GLUE2ExecutionEnvironmentOSName"][0].lower()
 #        arch = attrs["GLUE2ExecutionEnvironmentPlatform"].lower()
 #        os_version = attrs["GLUE2ExecutionEnvironmentOSVersion"]
 #        os = os_map.get(os, os) + os_version
@@ -138,7 +137,7 @@ def _get_queue_prefix(ldap_conn, config_dict):
                                                       config_dict) +
                                                   "(GLUE2ManagerProductName=*))"):
         site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
-        queue_prefix[site] = '-'.join(("nordugrid", attrs.get("GLUE2ManagerProductName", "unknown")))
+        queue_prefix[site] = '-'.join(("nordugrid", attrs.get("GLUE2ManagerProductName", ["unknown"])[0]))
     return queue_prefix
 
 def _tidy_time(timeval):
@@ -166,16 +165,16 @@ def _get_queues(ldap_conn, config_dict):
                                               "(GLUE2ComputingShareMappingQueue=*))"):
         domain_id, service_id = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
         ce = dn_ce2_regex.sub(r"\1", dn)
-        maxCPUTime = int(attrs.get("GLUE2ComputingShareMaxCPUTime", 2940))
-        maxWaitingJobs = int(attrs.get("GLUE2ComputingShareMaxWaitingJobs", 5000))
+        maxCPUTime = int(attrs.get("GLUE2ComputingShareMaxCPUTime", [2940])[0])
+        maxWaitingJobs = int(attrs.get("GLUE2ComputingShareMaxWaitingJobs", [5000])[0])
         # Some sites specifically advertise 0 for Max jobs
         # We'll default this to "4444" so it still works, but we can easily see that
         # it isn't the "5000" default.
         if not maxWaitingJobs:
             maxWaitingJobs = 4444
-        queue_id = attrs["GLUE2ShareID"]
+        queue_id = attrs["GLUE2ShareID"][0]
         queue_name = '-'.join((queue_prefix.get((domain_id, service_id), ''),
-                               attrs["GLUE2ComputingShareMappingQueue"]))
+                               attrs["GLUE2ComputingShareMappingQueue"][0]))
         queues_dict[domain_id, service_id, queue_id] = queue_name
         config_dict.get((domain_id, service_id), {})\
                    .get(ce, {})\
@@ -203,7 +202,7 @@ def _get_vos(ldap_conn, queues_dict, config_dict):
                                                       "(GLUE2PolicyRule=*))"):
             site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn), dn_queue_regex.sub(r"\1", dn)
             ce = dn_ce2_regex.sub(r"\1", dn)
-            vo = attrs["GLUE2PolicyRule"]
+            vo = attrs["GLUE2PolicyRule"][0]
             if vo_regex.match(vo):
                 config_dict.get((site[0], site[1]), {})\
                            .get(ce, {})\
