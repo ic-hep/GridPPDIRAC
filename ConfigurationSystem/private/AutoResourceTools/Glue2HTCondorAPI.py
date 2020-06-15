@@ -27,7 +27,7 @@ def get_endpoints(ldap_conn, domain_id, service_id):
                                                   "(GLUE2DomainID:dn:=%s)"
                                                   "(GLUE2EndpointURL=*))" % (
                                                   service_id, domain_id)):  # * forces the field to exist
-        endpoints.add(endpoint_ce_regex.sub(r"\1", attrs["GLUE2EndpointURL"]))
+        endpoints.add(endpoint_ce_regex.sub(r"\1", attrs["GLUE2EndpointURL"][0]))
     return endpoints
 
 
@@ -42,11 +42,8 @@ def _get_vos(ldap_conn, config_dict):
         site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
         for ce, info in config_dict[site].iteritems():
             queue = '-'.join((ce, "condor"))
-#            info["Queues"][queue].setdefault("VO", set()).update({vo.lower().replace("vo:", '')
-#                                                                  for vo in attrs["GLUE2PolicyRule"]})
-            info["Queues"][queue].setdefault("VO", set())\
-                                 .update({attrs["GLUE2PolicyRule"].lower().replace("vo:", '')})
-            # Maybe not mocked properly by mockldap
+            info["Queues"][queue].setdefault("VO", set()).update({vo.lower().replace("vo:", '')
+                                                                  for vo in attrs["GLUE2PolicyRule"]})
     return config_dict
 
 
@@ -62,13 +59,9 @@ def _get_os_arch(ldap_conn, config_dict):
                                                   "(GLUE2ExecutionEnvironmentOSVersion=*)"
                                                   "(GLUE2ExecutionEnvironmentPlatform=*))"):
 
-        # Maybe not mocked properly by mockldap
-#        arch = attrs["GLUE2ExecutionEnvironmentPlatform"][0].lower()
-#        os_version = attrs["GLUE2ExecutionEnvironmentOSVersion"][0]
-#        os = attrs["GLUE2ExecutionEnvironmentOSName"][0].lower()
-        arch = attrs["GLUE2ExecutionEnvironmentPlatform"].lower()
-        os_version = attrs["GLUE2ExecutionEnvironmentOSVersion"]
-        os = attrs["GLUE2ExecutionEnvironmentOSName"].lower()
+        arch = attrs["GLUE2ExecutionEnvironmentPlatform"][0].lower()
+        os_version = attrs["GLUE2ExecutionEnvironmentOSVersion"][0]
+        os = attrs["GLUE2ExecutionEnvironmentOSName"][0].lower()
 #        os = os_map.get(os, os) + os_version
         os = "EL7"  # This is a temporary fix for above as no standard yet
 
@@ -106,7 +99,7 @@ def _get_htcondor_ces(ldap_conn):
             continue
 
         max_total_jobs = int(attrs.get('GLUE2ComputingManagerTotalPhysicalCPUs',
-                                       attrs.get('GLUE2ComputingManagerTotalLogicalCPUs', 0)))
+                                       attrs.get('GLUE2ComputingManagerTotalLogicalCPUs', [0]))[0])
 
         for ce in get_endpoints(ldap_conn, domain_id, service_id):
             htcondor_ces[(domain_id, service_id)][ce] = {"CEType": "HTCondorCE",
