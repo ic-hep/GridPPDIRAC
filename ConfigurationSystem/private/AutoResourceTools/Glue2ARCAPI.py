@@ -113,6 +113,15 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
     cfg_system = ConfigurationSystem()
     for (site, _), ce_info in sorted(_get_arc_ces(ldap_conn).iteritems()):
         for ce, info in ce_info.iteritems():
+            # Start RAL T1 hack
+            # This splits the EL6 and EL7 queue so each CE only has one or the other
+            # It updates the CEs with the EL6 queue to advertise EL6 so jobs match...
+            if ce in ('arc-ce01.gridpp.rl.ac.uk', 'arc-ce02.gridpp.rl.ac.uk'):
+              info['OS'] = 'EL6'
+              info['Queues'] = {k:v for (k,v) in info['Queues'].items() if k == 'nordugrid-condor-grid3000M'}
+            elif ce.endswith('.gridpp.rl.ac.uk'):
+              info['Queues'] = {k:v for (k,v) in info['Queues'].items() if k != 'nordugrid-condor-grid3000M'}
+            # End RAL T1 hack
             if vo_list is not None:
                 logging.debug("Filtering out unwanted VOs from CE %s", ce)
                 # Filter VOs. first part of if is clever ruse to update in a comprehension (always returns None)
