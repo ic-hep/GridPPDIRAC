@@ -107,7 +107,7 @@ def _get_htcondor_ces(ldap_conn):
                                                          "wnTmpDir": '.',
                                                          "SI00": 3100,
                                                          "HostRAM": 4096,
-                                                         "MaxProcessors": 16,
+                                                         "MaxProcessors": 64,
                                                          "LastSeen": date.today().strftime('%d/%m/%Y'),
                                                          "UseLocalSchedd": False,
                                                          "DaysToKeepLogs": 2,

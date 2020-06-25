@@ -77,7 +77,7 @@ def _get_arc_ces(ldap_conn):
                                                  "SubmissionMode": "Direct",
                                                  "wnTmpDir": '.',
                                                  "HostRAM": 4096,
-                                                 "MaxProcessors": 16,
+                                                 "MaxProcessors": 64,
                                                  "LastSeen": date.today().strftime('%d/%m/%Y'),
                                                  "UseLocalSchedd": False,
                                                  "DaysToKeepLogs": 2,
