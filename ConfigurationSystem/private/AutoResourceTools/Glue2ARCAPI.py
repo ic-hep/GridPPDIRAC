@@ -50,7 +50,7 @@ def _get_os_arch(ldap_conn, config_dict):
     return config_dict
 
 
-def _get_arc_ces(ldap_conn):
+def _get_arc_ces(ldap_conn, max_processors=None):
     arc_ces = defaultdict(dict)
     for dn, attrs in ldap_conn.search_s(base="o=glue",
                                         scope=ldap.SCOPE_SUBTREE,
@@ -73,11 +73,12 @@ def _get_arc_ces(ldap_conn):
             logging.warning("Scraped domain id (site) is blank string.")
             continue
 
+        num_cores = int(max_processors or 64)
         arc_ces[(domain_id, service_id)][dn_ce2_regex.subn(r"\1", dn)[0]] = {"CEType": "ARC",
                                                  "SubmissionMode": "Direct",
                                                  "wnTmpDir": '.',
                                                  "HostRAM": 4096,
-                                                 "MaxProcessors": 64,
+                                                 "MaxProcessors": num_cores if num_cores > 1 else None,
                                                  "LastSeen": date.today().strftime('%d/%m/%Y'),
                                                  "UseLocalSchedd": False,
                                                  "DaysToKeepLogs": 2,
@@ -104,15 +105,19 @@ def _get_country_code(ce, default='xx', mapping=None):
     return default
 
 
-def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170)):
+def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170),
+                   banned_ces=None, max_processors=None):
     """
     Update ARC CEs from BDII.
     """
     ldap_conn = ldap.open(*bdii_host)
     sites_root = '/Resources/Sites/LCG'
     cfg_system = ConfigurationSystem()
-    for (site, _), ce_info in sorted(_get_arc_ces(ldap_conn).iteritems()):
+    for (site, _), ce_info in sorted(_get_arc_ces(ldap_conn, max_processors).iteritems()):
         for ce, info in ce_info.iteritems():
+            if banned_ces is not None and ce in banned_ces:
+                continue
+
             # Start RAL T1 hack
             # This splits the EL6 and EL7 queue so each CE only has one or the other
             # It updates the CEs with the EL6 queue to advertise EL6 so jobs match...

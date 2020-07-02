@@ -75,7 +75,7 @@ def _get_os_arch(ldap_conn, config_dict):
     return config_dict
 
 
-def _get_htcondor_ces(ldap_conn):
+def _get_htcondor_ces(ldap_conn, max_processors=None):
     htcondor_ces = defaultdict(dict)
     for dn, attrs in ldap_conn.search_s(base="o=glue",
                                         scope=ldap.SCOPE_SUBTREE,
@@ -101,13 +101,15 @@ def _get_htcondor_ces(ldap_conn):
         max_total_jobs = int(attrs.get('GLUE2ComputingManagerTotalPhysicalCPUs',
                                        attrs.get('GLUE2ComputingManagerTotalLogicalCPUs', [0]))[0])
 
+
+        num_cores = int(max_processors or 64)
         for ce in get_endpoints(ldap_conn, domain_id, service_id):
             htcondor_ces[(domain_id, service_id)][ce] = {"CEType": "HTCondorCE",
                                                          "SubmissionMode": "Direct",
                                                          "wnTmpDir": '.',
                                                          "SI00": 3100,
                                                          "HostRAM": 4096,
-                                                         "MaxProcessors": 64,
+                                                         "MaxProcessors": num_cores if num_cores > 1 else None,
                                                          "LastSeen": date.today().strftime('%d/%m/%Y'),
                                                          "UseLocalSchedd": False,
                                                          "DaysToKeepLogs": 2,
@@ -137,15 +139,19 @@ def _get_country_code(ce, default='xx', mapping=None):
     return default
 
 
-def update_htcondor_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170)):
+def update_htcondor_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170),
+                        banned_ces=None, max_processors=None):
     """
     Update HTCondor CEs from BDII.
     """
     ldap_conn = ldap.open(*bdii_host)
     sites_root = '/Resources/Sites/LCG'
     cfg_system = ConfigurationSystem()
-    for (site, _), ce_info in sorted(_get_htcondor_ces(ldap_conn).iteritems()):
+    for (site, _), ce_info in sorted(_get_htcondor_ces(ldap_conn, max_processors).iteritems()):
         for ce, info in ce_info.iteritems():
+            if banned_ces is not None and ce in banned_ces:
+                continue
+
             if vo_list is not None:
                 logging.debug("Filtering out unwanted VOs from HTCondor CE %s", ce)
                 # Filter VOs. first part of if is clever ruse to update in a comprehension (always returns None)

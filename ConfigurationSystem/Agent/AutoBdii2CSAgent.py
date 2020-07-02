@@ -61,6 +61,7 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
         self.ce_removal_threshold = self.am_getOption('CERemovalThreshold', 5)
         self.banned_ces = self.am_getOption('BannedCEs', [])
         self.banned_ses = self.am_getOption('BannedSEs', [])
+        self.max_processors = self.am_getOption('FixedMaxProcessors', None)
         return Bdii2CSAgent.initialize(self)
 
     def execute(self):
@@ -86,7 +87,7 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
                            domain=self.domain,
                            country_default=self.country_default,
                            banned_ces=self.banned_ces,
-                           max_processors=self.am_getOption('FixedMaxProcessors', None))
+                           max_processors=self.max_processors)
             except Exception:
                 self.log.exception("Error while running check for new CEs")
 
@@ -94,7 +95,10 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
             ##############################
             self.log.notice("Processing HTCondor Glue2 CEs")
             try:
-                find_htcondor_ces(voList=self.voName, bdii_host=self.bdii_host)
+                find_htcondor_ces(voList=self.voName,
+                                  bdii_host=self.bdii_host,
+                                  banned_ces=self.banned_ces,
+                                  max_processors=self.max_processors)
             except Exception:
                 self.log.exception("Error while running check for new HTCondor CEs")
 
@@ -102,7 +106,10 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
             ##############################
             self.log.notice("Processing ARC Glue2 CEs")
             try:
-                find_arc_ces(voList=self.voName, bdii_host=self.bdii_host)
+                find_arc_ces(voList=self.voName,
+                             bdii_host=self.bdii_host,
+                             banned_ces=self.banned_ces,
+                             max_processors=self.max_processors)
             except Exception:
                 self.log.exception("Error while running check for new ARC CEs")
 
