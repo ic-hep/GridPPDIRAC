@@ -11,12 +11,16 @@ from .AutoResourceTools.CETypes import Site
 from .AutoResourceTools.Glue2HTCondorAPI import update_htcondor_ces
 from .AutoResourceTools.Glue2ARCAPI import update_arc_ces
 
-def find_arc_ces(voList, bdii_host="topbdii.grid.hep.ph.ic.ac.uk:2170"):
+def find_arc_ces(voList, bdii_host="topbdii.grid.hep.ph.ic.ac.uk:2170",
+                 banned_ces=None, max_processors=None):
     """
     Find and add all ARC CEs defined using Glue2.
 
     Args:
         bdii_host (str): The BDII host in format <hostname>:<port>
+        banned_ces (list): List of banned CEs which will be skipped
+        max_processors (str/int): If specified and not None, this overrides the BDII gleaned MaxProcessors
+                                  value for a site which is defined for all CEs.
 
     Raises:
         ValueError: If the BDII host str cannot be split to it's two components (hostname and port).
@@ -32,14 +36,19 @@ def find_arc_ces(voList, bdii_host="topbdii.grid.hep.ph.ic.ac.uk:2170"):
     except ValueError:
         gLogger.error("Could not cast port '%s' to type int" % host[1])
         raise
-    update_arc_ces(vo_list=voList, bdii_host=host)
+    update_arc_ces(vo_list=voList, bdii_host=host,
+                   banned_ces=banned_ces, max_processors=max_processors)
 
-def find_htcondor_ces(voList, bdii_host="topbdii.grid.hep.ph.ic.ac.uk:2170"):
+def find_htcondor_ces(voList, bdii_host="topbdii.grid.hep.ph.ic.ac.uk:2170",
+                      banned_ces=None, max_processors=None):
     """
     Find and add all HTCondor CEs defined using Glue2.
 
     Args:
         bdii_host (str): The BDII host in format <hostname>:<port>
+        banned_ces (list): List of banned CEs which will be skipped
+        max_processors (str/int): If specified and not None, this overrides the BDII gleaned MaxProcessors
+                                  value for a site which is defined for all CEs.
 
     Raises:
         ValueError: If the BDII host str cannot be split to it's two components (hostname and port).
@@ -55,7 +64,8 @@ def find_htcondor_ces(voList, bdii_host="topbdii.grid.hep.ph.ic.ac.uk:2170"):
     except ValueError:
         gLogger.error("Could not cast port '%s' to type int" % host[1])
         raise
-    update_htcondor_ces(vo_list=voList, bdii_host=host)
+    update_htcondor_ces(vo_list=voList, bdii_host=host,
+                        banned_ces=banned_ces, max_processors=max_processors)
 
 
 
