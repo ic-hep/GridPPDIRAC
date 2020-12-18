@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 from urlparse import urlparse
 from DIRAC import gLogger
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
-from DIRAC.Core.Utilities.Grid import ldapSE, ldapService, getBdiiCEInfo
+from DIRAC.Core.Utilities.Grid import getBdiiCEInfo
 from .AutoResourceTools.utils import get_se_vo_info, get_xrootd_ports
 from .AutoResourceTools.ConfigurationSystem import ConfigurationSystem
 from .AutoResourceTools.SETypes import SE

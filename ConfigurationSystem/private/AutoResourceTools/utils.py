@@ -4,7 +4,21 @@ from collections import defaultdict
 from urlparse import urlparse
 from DIRAC import gLogger
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
-from DIRAC.Core.Utilities.Grid import ldapSEAccessProtocol, ldapsearchBDII
+from DIRAC.Core.Utilities.Grid import ldapsearchBDII
+from DIRAC.Core.Utilities.ReturnValues import S_OK
+
+
+def ldapSEAccessProtocol( se, attr = None, host = None ):
+    """ SE access protocol information from bdii
+      :param  se: se or part of it with globing, for example, "ce0?.tier2.hep.manchester*"
+      :return: standard DIRAC answer with Value equals to list of access protocols.
+    """
+    filt = '(&(objectClass=GlueSEAccessProtocol)(GlueChunkKey=GlueSEUniqueID=%s))' % se
+    result = ldapsearchBDII( filt, attr, host )
+
+    if not result['OK']:
+        return result
+    return S_OK([value["attr"] for value in result['Value']])
 
 
 class WritableMixin(object):
