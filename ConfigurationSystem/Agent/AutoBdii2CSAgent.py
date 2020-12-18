@@ -68,14 +68,13 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
         """General agent execution method."""
         # Update SEs
         ##############################
-        if self.processSEs:
-            url = urlparse('//%s' % self.bdii_host)
-            try:
-                update_ses(self.voName,
-                           address=(url.hostname, url.port if url.port is not None else 2170),
-                           banned_ses=self.banned_ses)
-            except Exception:
-                self.log.exception("Error while running check for new SEs")
+        url = urlparse('//%s' % self.bdii_host)
+        try:
+            update_ses(self.voName,
+                       address=(url.hostname, url.port if url.port is not None else 2170),
+                       banned_ses=self.banned_ses)
+        except Exception:
+            self.log.exception("Error while running check for new SEs")
 
         # Update CEs
         ##############################
