@@ -13,7 +13,7 @@ from .ldaptools import in_, MockLdap as ldap
 
 
 endpoint_ce_regex = re.compile(r"^(?:condor|https)://([^:]+):\d+/?$")
-dn_ce_regex = re.compile(r"^.*GLUE2ServiceID=([^,:]+)(?::[0-9]+)?,.*$")
+dn_ce_regex = re.compile(r"^.*GLUE2ServiceID=([^,]+),.*$")
 dn_site_regex = re.compile(r"^.*GLUE2DomainID=([^,]+),.*$")
 cc_regex = re.compile(r'\.([a-zA-Z]{2})$')
 
