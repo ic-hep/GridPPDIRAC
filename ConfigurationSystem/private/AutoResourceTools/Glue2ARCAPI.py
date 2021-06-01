@@ -127,6 +127,11 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
             elif ce.endswith('.gridpp.rl.ac.uk'):
               info['Queues'] = {k:v for (k,v) in info['Queues'].items() if k != 'nordugrid-condor-grid3000M'}
             # End RAL T1 hack
+            # Candian Sites
+            # These require an extra JDL string in the pilot to set the default queue time & default memory
+            if ce.endswith('.ca'):
+              info['XRSLExtraString'] = '(wallTime="1440")(memory>="3500")'
+            #
             if vo_list is not None:
                 logging.debug("Filtering out unwanted VOs from CE %s", ce)
                 # Filter VOs. first part of if is clever ruse to update in a comprehension (always returns None)
