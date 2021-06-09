@@ -219,13 +219,19 @@ def _get_vos(ldap_conn, queues_dict, config_dict):
                                                            "GLUE2ShareID:dn:"),
                                                           queues_dict_chunk) +
                                                       "(GLUE2PolicyRule=*))"):
-            site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn), dn_queue_regex.sub(r"\1", dn)
-            ce = dn_ce2_regex.sub(r"\1", dn)
-            vo = attrs["GLUE2PolicyRule"][0]
-            if vo_regex.match(vo):
-                config_dict.get((site[0], site[1]), {})\
-                           .get(ce, {})\
-                           .get("Queues", {})[queues_dict[site]]["VO"].add(vo_regex.sub(r"\1", vo))
+            try:
+                site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn), dn_queue_regex.sub(r"\1", dn)
+                ce = dn_ce2_regex.sub(r"\1", dn)
+                vo = attrs["GLUE2PolicyRule"][0]
+                if vo_regex.match(vo):
+                    config_dict.get((site[0], site[1]), {})\
+                               .get(ce, {})\
+                               .get("Queues", {})[queues_dict[site]]["VO"].add(vo_regex.sub(r"\1", vo))
+            except Exception as err:
+                # Something wrong with this site, skip it
+                logging.warning("Bad entry for %s: %s", dn, str(err))
+                continue
+
     return config_dict
 
 
