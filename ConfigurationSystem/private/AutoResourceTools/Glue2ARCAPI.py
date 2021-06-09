@@ -118,19 +118,15 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
             if banned_ces is not None and ce in banned_ces:
                 continue
 
-            # Start RAL T1 hack
-            # This splits the EL6 and EL7 queue so each CE only has one or the other
-            # It updates the CEs with the EL6 queue to advertise EL6 so jobs match...
-            if ce in ('arc-ce01.gridpp.rl.ac.uk', 'arc-ce02.gridpp.rl.ac.uk'):
-              info['OS'] = 'EL6'
-              info['Queues'] = {k:v for (k,v) in info['Queues'].items() if k == 'nordugrid-condor-grid3000M'}
-            elif ce.endswith('.gridpp.rl.ac.uk'):
-              info['Queues'] = {k:v for (k,v) in info['Queues'].items() if k != 'nordugrid-condor-grid3000M'}
+            # RAL T1: Ensure EL6 queue ('nordugrid-condor-grid3000M') is gone and any remaining queue gets an EL7 tag
+            if ce.endswith('.gridpp.rl.ac.uk'):
+                info['Queues'] = {k:v for (k,v) in info['Queues'].items() if k != 'nordugrid-condor-grid3000M'}
+                info['OS'] = 'EL7'
             # End RAL T1 hack
             # Candian Sites
             # These require an extra JDL string in the pilot to set the default queue time & default memory
             if ce.endswith('.ca'):
-              info['XRSLExtraString'] = '(wallTime="1440")(memory>="3500")'
+                info['XRSLExtraString'] = '(wallTime="1440")(memory>="3500")'
             #
             if vo_list is not None:
                 logging.debug("Filtering out unwanted VOs from CE %s", ce)

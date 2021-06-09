@@ -108,26 +108,8 @@ class CE(WritableMixin, namedtuple('CE', ('DiracName',
             raise NotIncludedError("Excluding ARC CEs")
 
         num_cores = int(max_processors or ce_info.get('GlueHostArchitectureSMPSize', 1))
-        # RAL HACKS.. cause T1, innit ? - for each CE either only allow EL6 or EL7 queue, plus a hack for SKA
-        if ce == 'arc-ce03.gridpp.rl.ac.uk':
-            num_cores = 24
-        if ce == 'arc-ce01.gridpp.rl.ac.uk' or ce == 'arc-ce02.gridpp.rl.ac.uk' or ce == 'arc-ce03.gridpp.rl.ac.uk':
-            queues_el6 =  [q for q in queues if q.DiracName == 'nordugrid-Condor-grid3000M']
-            return super(CE, cls).__new__(cls,
-                                          DiracName=ce,
-                                          Queues=queues_el6,
-                                          MaxProcessors=num_cores if num_cores > 1 else None,
-                                          LastSeen=date.today().strftime('%d/%m/%Y'),
-                                          architecture=ce_info.get('GlueHostArchitecturePlatformType', ''),
-                                          SI00=ce_si00,
-                                          HostRAM=ce_info.get('GlueHostMainMemoryRAMSize', ''),
-                                          CEType='ARC' if ce_type == 'ARC-CE' else ce_type,
-                                          OS='EL6',
-                                          SubmissionMode='Direct' if 'ARC' in ce_type or 'CREAM' in ce_type else None,
-                                          JobListFile='%s-jobs.xml' % ce if 'ARC' in ce_type else None)
-
-
-        if ce == 'arc-ce05.gridpp.rl.ac.uk' or ce == 'arc-ce04.gridpp.rl.ac.uk':
+        # RAL HACKS.. cause T1, innit ?: Remove the EL6 queues ('nordugrid-Condor-grid3000M')
+        if ce.endswith('.gridpp.rl.ac.uk'):
             queues_el7 =  [q for q in queues if q.DiracName == 'nordugrid-Condor-EL7']
             return super(CE, cls).__new__(cls,
                                           DiracName=ce,
