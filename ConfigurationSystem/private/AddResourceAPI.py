@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta
 from urlparse import urlparse
 from DIRAC import gLogger
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
-from DIRAC.Core.Utilities.Grid import getBdiiCEInfo
+from DIRAC.Core.Utilities.Glue2 import getGlue2CEInfo
 from .AutoResourceTools.utils import get_se_vo_info, get_xrootd_ports
 from .AutoResourceTools.ConfigurationSystem import ConfigurationSystem
 from .AutoResourceTools.SETypes import SE
@@ -125,11 +125,10 @@ def update_ces(voList, domain='LCG', country_default='xx', host=None,
     ##############################
     site_details = {}
     for vo in voList:
-        result = getBdiiCEInfo(vo, host=host)
+        result = getGlue2CEInfo(vo, host=host)
         if not result['OK']:
-            gLogger.error("Failed to call getBdiiCEInfo(vo=%s, host=%s): %s" % (vo, host, result['Message']))
-            raise RuntimeError("getBdiiCEInfo failure.")
-
+            gLogger.error("Failed to call getGlue2CEInfo(vo=%s, host=%s): %s" % (vo, host, result['Message']))
+            raise RuntimeError("getGlue2CEInfo failure.")
         ce_bdii_dict = result['Value']
         if not ce_bdii_dict:
             gLogger.warn("No CEs found in BDII for %s" % vo)
