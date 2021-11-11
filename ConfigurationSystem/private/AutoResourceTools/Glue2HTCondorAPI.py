@@ -160,6 +160,16 @@ def update_htcondor_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk",
             if not info["Queues"]:
                 logging.warning("Skipping HTCondor CE %s as it has no queues that support our VOs", ce)
                 continue
+            # duplicate each queue, so we have a single and an 8 core queue
+            old_queues = info["Queues"].copy()
+            for queue in old_queues:
+                multi_queue = "%s-multi" % queue
+                info["Queues"][multi_queue] = info["Queues"][queue].copy()
+                info["Queues"][queue]["NumberOfProcessors"] = 1
+                info["Queues"][multi_queue]["NumberOfProcessors"] = 8
+                info["Queues"][multi_queue]["Tag"] = "MultiProcessor"
+                info["Queues"][multi_queue]["RequiredTag"] = "MultiProcessor"
+                info["Queues"][multi_queue]["LocalCEType"] = "Pool"
             site_path = '.'.join(('LCG', site, _get_country_code(ce)))
             cfg_system.append_unique(cfgPath(sites_root, site_path), "CE", ce)
             for option, value in info.iteritems():

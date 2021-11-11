@@ -117,7 +117,6 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
         for ce, info in ce_info.iteritems():
             if banned_ces is not None and ce in banned_ces:
                 continue
-
             # RAL T1: Ensure EL6 queue ('nordugrid-condor-grid3000M') is gone and any remaining queue gets an EL7 tag
             if ce.endswith('.gridpp.rl.ac.uk'):
                 info['Queues'] = {k:v for (k,v) in info['Queues'].items() if k != 'nordugrid-condor-grid3000M'}
@@ -136,6 +135,25 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
             if not info["Queues"]:
                 logging.warning("Skipping CE %s as it has no queues that support our VOs", ce)
                 continue
+            # go forth and multiply
+            old_queues = info["Queues"].copy()
+            for queue in old_queues:
+                print queue
+                print info["Queues"][queue]
+                multi_queue = "%s-multi" % queue
+                info["Queues"][multi_queue] = info["Queues"][queue].copy()
+                info["Queues"][queue]["NumberOfProcessors"] = 1
+                info["Queues"][multi_queue]["NumberOfProcessors"] = 8
+                multi_tag_string = "MultiProcessor"
+                # go out on a limb and assume any queues that contain 'gpu' or 'GPU' are exactly that
+                if "gpu" in queue or "GPU" in queue:
+                    multi_tag_string = "MultiProcessor, GPU"
+                # Manchester SKA hack
+                if "hep.manchester.ac.uk" in ce and "himem" in queue:
+                    multi_tag_string = "MultiProcessor, skatelescope.eu.hmem"
+                info["Queues"][multi_queue]["Tag"] = multi_tag_string
+                info["Queues"][multi_queue]["RequiredTag"] = multi_tag_string
+                info["Queues"][multi_queue]["LocalCEType"] = "Pool"
             site_path = '.'.join(('LCG', site, _get_country_code(ce)))
             cfg_system.append_unique(cfgPath(sites_root, site_path), "CE", ce)
             for option, value in info.iteritems():
