@@ -140,7 +140,9 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
             for queue in old_queues:
                 print queue
                 print info["Queues"][queue]
-                multi_queue = "%s-multi" % queue
+                # because DIRAC puts the queue name in the rsl, everything after the second hyphen needs to be unchanged
+                queue_bits = queue.split('-', 1)
+                multi_queue = "%s-multim%s" % (queue_bits[0], queue_bits[1])
                 info["Queues"][multi_queue] = info["Queues"][queue].copy()
                 info["Queues"][queue]["NumberOfProcessors"] = 1
                 info["Queues"][multi_queue]["NumberOfProcessors"] = 8
