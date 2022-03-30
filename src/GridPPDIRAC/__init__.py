@@ -1,3 +1,7 @@
 
 # Set the GridPP module version so that it's displayed on the web interface:
-version = "v6r17"
+version = "1.0.0"
+
+def extension_metadata():
+    return {"priority": 11}
+
