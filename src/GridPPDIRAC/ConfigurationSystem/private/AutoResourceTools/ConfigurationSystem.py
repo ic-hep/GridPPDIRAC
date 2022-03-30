@@ -51,7 +51,7 @@ class ConfigurationSystem(CSAPI):
         """
         if isinstance(new_value, dict):
             section = cfgPath(section, option)
-            for option, val in new_value.iteritems():
+            for option, val in new_value.items():
                 self.add(section, option, val)
             return
 
@@ -148,8 +148,8 @@ class ConfigurationSystem(CSAPI):
     def commit(self):
         """Commit the changes to the configuration system."""
         # Perform all the appending operations at the end to only get from current config once.
-        for path, value in chain(self._append_dict.iteritems(),
-                                 self._append_unique_dict.iteritems()):
+        for path, value in chain(self._append_dict.items(),
+                                 self._append_unique_dict.items()):
             section, option = path.rsplit('/', 1)
             self.add(section, option, value)
 

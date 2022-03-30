@@ -46,7 +46,7 @@ class DiracUsers(dict):
     @property
     def DiracNames(self):
         '''Return the list of users DIRAC ids'''
-        return (user['DiracName'] for user in self.itervalues()
+        return (user['DiracName'] for user in self.values()
                 if 'DiracName' in user)
 
     def nextValidName(self, pattern):
@@ -54,7 +54,7 @@ class DiracUsers(dict):
         count = -1
         r = re.compile(r'%s(?P<index>[0-9]*?)\Z' % pattern)
         ## faster implementation than max
-        for u in self.itervalues():
+        for u in self.values():
             match = r.match(u['DiracName'])
             if match:
                 # or 0 catches the case with no numbers
@@ -85,7 +85,7 @@ class UsersAndGroupsAPI(object):
             gLogger.fatal('        <vo>_user  = /<vo>')
             gLogger.fatal('        <vo>_admin = /<vo>/Role=admin')
             return result
-        vomsMapping = dict(((v, k) for k, v in result['Value'].iteritems()))
+        vomsMapping = dict(((v, k) for k, v in result['Value'].items()))
 
         ## Main VO loop
         ################################################################
@@ -98,7 +98,7 @@ class UsersAndGroupsAPI(object):
             if not result['OK']:
                 gLogger.warn('Could not retrieve VOMS VO name for vo %s, '
                              'skipping...' % vo)
-                dead_VO_groups.update(v for k, v in vomsMapping.iteritems() if k.startswith('/%s' % vo))
+                dead_VO_groups.update(v for k, v in vomsMapping.items() if k.startswith('/%s' % vo))
                 continue
             voNameInVOMS = result['Value']
 
@@ -202,19 +202,19 @@ class UsersAndGroupsAPI(object):
                          "No static users will be processed")
         group_regex = re.compile(r"^/Registry/Groups/([^/]+)/StaticUsers$")
         group_static_users = {group_regex.sub(r"\1", group): members
-                              for group, members in result.get("Value", {}).iteritems()}
+                              for group, members in result.get("Value", {}).items()}
 
         ## add groups before users as fails if user belongs
         ## to unknown group. use modify so if group already
         ## exists, start by blanking it's users (or setting to the static list)
-        managed_groups = set(vomsMapping.itervalues()) - dead_VO_groups
+        managed_groups = set(vomsMapping.values()) - dead_VO_groups
         for group in managed_groups:
             #csapi.addGroup(group, {'Users': ''})
             csapi.modifyGroup(group, {'Users': group_static_users.get(group, '')},
                               createIfNonExistant=True)
 
         obsoleteUsers = set()
-        for user in usersInVOMS.itervalues():
+        for user in usersInVOMS.values():
             user_nick = user.pop('DiracName', None)
             if not user_nick:
                 gLogger.warn('No user nickname for user with DN %s, '

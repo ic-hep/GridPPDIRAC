@@ -9,7 +9,7 @@ default parameters.
 For the CEs and SEs already present in the CS, the agent is updating
 if necessary settings which were changed in the BDII recently
 """
-from urlparse import urlparse
+from urllib.parse import urlparse
 from datetime import datetime, date, timedelta
 from textwrap import dedent
 

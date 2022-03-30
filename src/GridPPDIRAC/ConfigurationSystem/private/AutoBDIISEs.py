@@ -6,7 +6,7 @@ import copy
 from itertools import chain
 from collections import Counter
 from datetime import date
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 from DIRAC import gLogger
 from DIRAC.Core.Base import Script
@@ -75,7 +75,7 @@ def ldapsearch_bdii_ses(address=('lcg-bdii.cern.ch', 2170),
     existing_dirac_names = {}
     all_dirac_se_names = set()  # convienience for later
     # tape and disk might share se?
-    for se, se_info in sorted(result['Value'].getAsDict(cfg_base_path).iteritems()):
+    for se, se_info in sorted(result['Value'].getAsDict(cfg_base_path).items()):
         # str is the case for Options, e.g. DefaultProtocols
         if not isinstance(se_info, dict) or 'Host' not in se_info:
             continue
@@ -89,7 +89,7 @@ def ldapsearch_bdii_ses(address=('lcg-bdii.cern.ch', 2170),
             continue
 
         latency_dict[latency] = {'dirac_name': se}
-        for key, value in se_info.iteritems():
+        for key, value in se_info.items():
             if key.startswith('AccessProtocol.') and 'Protocol' in value:
                 latency_dict[latency][value['Protocol']] = int(key.rsplit('.', 1)[-1])
 
@@ -109,7 +109,7 @@ def ldapsearch_bdii_ses(address=('lcg-bdii.cern.ch', 2170),
         se['host'] = host
         srm_vos = sa_dict.get(host, {}).get('GlueSAAccessControlBaseRule', [])
         latency_dict = sa_dict.get(host, {})
-        for latency, sas in latency_dict.iteritems():
+        for latency, sas in latency_dict.items():
             current_dirac_cfg = existing_dirac_names.get(host, {}).get(latency, {})
             dirac_name = current_dirac_cfg.get('dirac_name')
             if not dirac_name:
@@ -181,7 +181,7 @@ def ldapsearch_bdii_ses(address=('lcg-bdii.cern.ch', 2170),
             voinfo_dict.setdefault(se, {})\
                        .setdefault(vo.replace('VO:', ''), set())\
                        .add(voinfo['GlueVOInfoPath'][0])
-    for se, vo_info in voinfo_dict.iteritems():
+    for se, vo_info in voinfo_dict.items():
         vo_info['common_path'] = os.path.dirname(
             os.path.commonprefix([i if i.endswith(os.sep) else i + os.sep
                                   for i in chain.from_iterable(vo_info.values())]))
@@ -196,7 +196,7 @@ def update_ses(considered_vos=None, cfg_base_path='/Resources/StorageElements',
                               cfg_base_path=cfg_base_path)
 
     cs = ConfigurationSystem()
-    for se, se_info in sorted(se_dict.iteritems()):
+    for se, se_info in sorted(se_dict.items()):
         host = se_info['host']
         if banned_ses is not None and host in banned_ses:
             gLogger.info("Skipping banned SE: %s" % host)
@@ -236,7 +236,7 @@ def update_ses(considered_vos=None, cfg_base_path='/Resources/StorageElements',
             cs.add(ap_path, 'SpaceToken', '')
             cs.add(ap_path, 'WSUrl', '/srm/managerv2?SFN=')
             vo_path = os.path.join(ap_path, 'VOPath')
-            for vo_name, paths in sorted(vopaths.iteritems()):
+            for vo_name, paths in sorted(vopaths.items()):
                 valid_paths = sorted(path for path in paths if not path.isupper())
                 if valid_paths:
                     cs.add(vo_path, vo_name, min(valid_paths, key=len))
@@ -255,7 +255,7 @@ def update_ses(considered_vos=None, cfg_base_path='/Resources/StorageElements',
             cs.add(ap_path, 'Protocol', 'root')
             cs.add(ap_path, 'SpaceToken', '')
             vo_path = os.path.join(ap_path, 'VOPath')
-            for vo_name, paths in sorted(vopaths.iteritems()):
+            for vo_name, paths in sorted(vopaths.items()):
                 valid_paths = sorted(path for path in paths if not path.isupper())
                 if valid_paths:
                     cs.add(vo_path, vo_name, min(valid_paths, key=len))

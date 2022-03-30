@@ -35,7 +35,7 @@ class Site(WritableMixin, namedtuple('Site', ('DiracName',
 
         # We have to collect CE names across all VOs        
         for site_info in site_info_lst:
-            for ce, ce_info in sorted(site_info.get('CEs', {}).iteritems()):
+            for ce, ce_info in sorted(site_info.get('CEs', {}).items()):
                if banned_ces is not None and ce in banned_ces:
                    continue
 
@@ -70,7 +70,7 @@ class Site(WritableMixin, namedtuple('Site', ('DiracName',
             cc_regex = cls.cc_regex
 
         ce = ce.strip().lower()
-        for key, value in cc_mappings.iteritems():
+        for key, value in cc_mappings.items():
             if ce.endswith(key):
                 return value
         cc = cc_regex.search(ce)
@@ -100,7 +100,7 @@ class CE(WritableMixin, namedtuple('CE', ('DiracName',
         ce_type = ''
         ce_logical_cpus = int(ce_info.get('GlueSubClusterLogicalCPUs', 0))
         ce_si00 = ce_info.get('GlueHostBenchmarkSI00', '')
-        for queue, queue_info in sorted(ce_info.get('Queues', {}).iteritems()):
+        for queue, queue_info in sorted(ce_info.get('Queues', {}).items()):
             queues.append(Queue(queue, queue_info, ce_logical_cpus, ce_si00))
             ce_type = queue_info.get('GlueCEImplementationName', '')
 

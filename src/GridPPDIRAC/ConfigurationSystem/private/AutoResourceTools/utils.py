@@ -1,7 +1,7 @@
 """Dirac multiVO utilities."""
 import os
 from collections import defaultdict
-from urlparse import urlparse
+from urllib.parse import urlparse
 from DIRAC import gLogger
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
 from DIRAC.Core.Utilities.Grid import ldapsearchBDII
@@ -42,7 +42,7 @@ class WritableMixin(object):
         """
         path = cfgPath(path_root, self.DiracName)
 
-        for option, value in self._replace(DiracName=None)._asdict().iteritems():
+        for option, value in self._replace(DiracName=None)._asdict().items():
             if isinstance(value, list):
                 for val in value:
                     val.write(cfg_system, cfgPath(path, option))
@@ -52,7 +52,7 @@ class WritableMixin(object):
             elif isinstance(value, WritableMixin):
                 value.write(cfg_system, path)
             elif isinstance(value, dict):
-                for key, val in value.iteritems():
+                for key, val in value.items():
                     cfg_system.add(cfgPath(path, option), key, val)
             elif isinstance(value, set):
                 cfg_system.append_unique(path, option, sorted(value))
@@ -79,7 +79,7 @@ def splitcommonvopaths(vo_paths):
                           second
     """
     root = os.path.dirname(os.path.commonprefix([i if i.endswith(os.sep) else i + os.sep
-                                                 for i in vo_paths.itervalues()]))
+                                                 for i in vo_paths.values()]))
     return root, {vo: path[len(root):].strip(os.sep) for vo, path in vo_paths}
 
 
@@ -130,7 +130,7 @@ def get_se_vo_info(vo_name, host=None):
                 paths_mapping[elem.replace('GlueSEUniqueID=', '')].add(se_info['attr']['GlueVOInfoPath'])
 
     ret = {}
-    for se_name, vo_info_paths in paths_mapping.iteritems():
+    for se_name, vo_info_paths in paths_mapping.items():
         sorted_paths = sorted(vo_info_paths, key=len)
         len_orig = len(vo_info_paths)
         len_unique = len(set((len(path) for path in vo_info_paths)))

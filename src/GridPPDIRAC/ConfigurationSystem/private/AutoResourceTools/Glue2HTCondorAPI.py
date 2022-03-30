@@ -7,9 +7,9 @@ from collections import defaultdict
 from datetime import date
 
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
-from ConfigurationSystem import ConfigurationSystem
+# from ConfigurationSystem import ConfigurationSystem
 from .ldaptools import in_, MockLdap as ldap
-# from .AutoResourceTools.ConfigurationSystem import ConfigurationSystem
+from .ConfigurationSystem import ConfigurationSystem
 
 
 endpoint_ce_regex = re.compile(r"^(?:condor|https)://([^:]+):\d+/?$")
@@ -40,7 +40,7 @@ def _get_vos(ldap_conn, config_dict):
                                                       config_dict) +
                                                   "(GLUE2PolicyRule=*))"):
         site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
-        for ce, info in config_dict[site].iteritems():
+        for ce, info in config_dict[site].items():
             queue = '-'.join((ce, "condor"))
             info["Queues"][queue].setdefault("VO", set()).update({vo.lower().replace("vo:", '')
                                                                   for vo in attrs["GLUE2PolicyRule"]})
@@ -66,7 +66,7 @@ def _get_os_arch(ldap_conn, config_dict):
         os = "EL7"  # This is a temporary fix for above as no standard yet
 
         site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
-        for ce, info in config_dict[site].iteritems():
+        for ce, info in config_dict[site].items():
             current_arch = info.get("architecture", '')
             current_os = info.get("OS", '')
             if os > current_os or arch > current_arch:
@@ -130,7 +130,7 @@ def _get_country_code(ce, default='xx', mapping=None):
                    'efda.org': 'uk',
                    'atlas-swt2.org': 'us'}
     ce = ce.strip().lower()
-    for key, value in mapping.iteritems():
+    for key, value in mapping.items():
         if ce.endswith(key):
             return value
     match = cc_regex.search(ce)
@@ -147,15 +147,15 @@ def update_htcondor_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk",
     ldap_conn = ldap.open(*bdii_host)
     sites_root = '/Resources/Sites/LCG'
     cfg_system = ConfigurationSystem()
-    for (site, _), ce_info in sorted(_get_htcondor_ces(ldap_conn, max_processors).iteritems()):
-        for ce, info in ce_info.iteritems():
+    for (site, _), ce_info in sorted(_get_htcondor_ces(ldap_conn, max_processors).items()):
+        for ce, info in ce_info.items():
             if banned_ces is not None and ce in banned_ces:
                 continue
 
             if vo_list is not None:
                 logging.debug("Filtering out unwanted VOs from HTCondor CE %s", ce)
                 # Filter VOs. first part of if is clever ruse to update in a comprehension (always returns None)
-                info["Queues"] = {key: val for key, val in info["Queues"].iteritems()
+                info["Queues"] = {key: val for key, val in info["Queues"].items()
                                   if (val.update(VO=val['VO'].intersection(vo_list)) or val['VO'])}
             if not info["Queues"]:
                 logging.warning("Skipping HTCondor CE %s as it has no queues that support our VOs", ce)
@@ -172,7 +172,7 @@ def update_htcondor_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk",
                 info["Queues"][multi_queue]["LocalCEType"] = "Pool"
             site_path = '.'.join(('LCG', site, _get_country_code(ce)))
             cfg_system.append_unique(cfgPath(sites_root, site_path), "CE", ce)
-            for option, value in info.iteritems():
+            for option, value in info.items():
                 cfg_system.add(cfgPath(sites_root, site_path, "CEs", ce), option, value)
     cfg_system.commit()
 

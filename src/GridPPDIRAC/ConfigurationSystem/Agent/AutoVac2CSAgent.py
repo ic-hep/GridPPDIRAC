@@ -187,9 +187,9 @@ class AutoVac2CSAgent(AgentModule):
         base_path = '/Resources/Sites'
         for site_type in ('VAC', 'CLOUD'):
             site_type_path = cfgPath(base_path, site_type)
-            for site, site_info in result['Value'].getAsDict(base_path).iteritems():
+            for site, site_info in result['Value'].getAsDict(base_path).items():
                 site_path = cfgPath(site_type_path, site)
-                for ce, ce_info in site_info.get('CEs', {}).iteritems():
+                for ce, ce_info in site_info.get('CEs', {}).items():
                     ce_path = cfgPath(site_path, 'CEs', ce)
 
                     if 'LastSeen' not in ce_info:
@@ -209,7 +209,7 @@ class AutoVac2CSAgent(AgentModule):
                     old_ces.clear()
 
         host_base = '/Registry/Hosts'
-        for host, host_info in result['Value'].getAsDict(host_base).iteritems():
+        for host, host_info in result['Value'].getAsDict(host_base).items():
             host_path = cfgPath(host_base, host)
             if 'LastSeen' not in host_info:
                 self.log.warn("No LastSeen info for host: %s" % host)
@@ -233,7 +233,7 @@ class AutoVac2CSAgent(AgentModule):
             cc_regex = cls.cc_regex
 
         ce = ce.strip().lower()
-        for key, value in cc_mappings.iteritems():
+        for key, value in cc_mappings.items():
             if ce.endswith(key):
                 return value
         cc = cc_regex.search(ce)

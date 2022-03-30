@@ -4,13 +4,13 @@ HTTPSClientUtils
 Module defining an HTTPS transport which allows for the
 passing of client cert and key files.
 '''
-import urllib2
-import httplib
+import urllib.request
+import http.client
 import ssl
 from suds.transport.http import HttpTransport
 
 
-class HTTPSClientAuthHandler(urllib2.HTTPSHandler):
+class HTTPSClientAuthHandler(urllib.request.HTTPSHandler):
     '''
     HTTPSClientAuthHandler
 
@@ -18,7 +18,7 @@ class HTTPSClientAuthHandler(urllib2.HTTPSHandler):
     '''
     def __init__(self, cert, key, capath):
         '''initialise'''
-        urllib2.HTTPSHandler.__init__(self)
+        super(HTTPSClientAuthHandler, self).__init__()
         self._ssl_context = ssl.SSLContext(ssl.PROTOCOL_SSLv23)
         self._ssl_context.load_cert_chain(cert, key)
         self._ssl_context.load_verify_locations(capath=capath)
@@ -30,9 +30,9 @@ class HTTPSClientAuthHandler(urllib2.HTTPSHandler):
         passing of client cert and key files to create an
         authenticated HTTPSConnection
         '''
-        return httplib.HTTPSConnection(host,
-                                       timeout=timeout,
-                                       context=self._ssl_context)
+        return http.client.HTTPSConnection(host,
+                                           timeout=timeout,
+                                           context=self._ssl_context)
 
     def https_open(self, req):
         '''
@@ -51,6 +51,6 @@ class HTTPSClientCertTransport(HttpTransport):
     def __init__(self, cert, key, capath, *args, **kwargs):
         '''initialise'''
         HttpTransport.__init__(self, *args, **kwargs)
-        self.urlopener = urllib2.build_opener(HTTPSClientAuthHandler(cert,
-                                                                     key,
-                                                                     capath))
+        self.urlopener = urllib.request.build_opener(HTTPSClientAuthHandler(cert,
+                                                                            key,
+                                                                            capath))

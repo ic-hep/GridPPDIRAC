@@ -3,7 +3,7 @@ import os
 import re
 from datetime import date
 from collections import namedtuple
-from urlparse import urlparse
+from urllib.parse import urlparse
 from DIRAC import gLogger
 from .utils import WritableMixin  # , splitcommonvopaths
 
@@ -72,7 +72,7 @@ class AccessProtocol(WritableMixin, namedtuple('AccessProtocol', ('DiracName',
 #            current_vo_paths = {vo: os.path.join(old_path_var, vo_path) for vo, vo_path in
 #                                gConfig.getOptionsDict(cfgPath(path_root,
 #                                                               self.DiracName,
-#                                                               'VOPath')).get('Value', {}).iteritems()}
+#                                                               'VOPath')).get('Value', {}).items()}
 #
 #            current_vo_paths.update({vo: os.path.join(self.Path, vo_path) for vo, vo_path in self.VOPath})
 #            path, vo_paths = splitcommonvopaths(current_vo_paths)
@@ -150,9 +150,9 @@ class SE(WritableMixin, namedtuple('SE', ('DiracName',
         se_latency = SE.latency_mapping.get(se_info.get('GlueSAAccessLatency', 'online').lower(),
                                             'disk')
         dirac_name = None
-        matching_ses = {se: host for se, host in existing_ses.iteritems()\
+        matching_ses = {se: host for se, host in existing_ses.items()\
                         if se.startswith(bdii_site_id) and se.endswith(se_latency)}
-        for dirac_sename, hostname in matching_ses.iteritems():
+        for dirac_sename, hostname in matching_ses.items():
             if hostname == se:
                 dirac_name = dirac_sename
 

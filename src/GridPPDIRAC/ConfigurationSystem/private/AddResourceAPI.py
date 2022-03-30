@@ -1,6 +1,6 @@
 """API for adding resources to CS."""
 from datetime import date, datetime, timedelta
-from urlparse import urlparse
+from urllib.parse import urlparse
 from DIRAC import gLogger
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
 from DIRAC.Core.Utilities.Glue2 import getGlue2CEInfo
@@ -90,7 +90,7 @@ def find_old_ses(notification_threshold=14):
     old_ses = set()
     today = date.today()
     notification_threshold = timedelta(days=notification_threshold)
-    for se, se_info in result['Value'].getAsDict('/Resources/StorageElements').iteritems():
+    for se, se_info in result['Value'].getAsDict('/Resources/StorageElements').items():
         if 'LastSeen' not in se_info:
             gLogger.warn("No LastSeen info for SE: %s" % se)
             continue
@@ -133,7 +133,7 @@ def update_ces(voList, domain='LCG', country_default='xx', host=None,
         if not ce_bdii_dict:
             gLogger.warn("No CEs found in BDII for %s" % vo)
 
-        for site_name, site_info in ce_bdii_dict.iteritems():
+        for site_name, site_info in ce_bdii_dict.items():
             if site_name in site_details:
                 site_details[site_name].append(site_info)
             else:
@@ -142,7 +142,7 @@ def update_ces(voList, domain='LCG', country_default='xx', host=None,
     # Main update loop
     ##############################
     cfg_system = ConfigurationSystem()
-    for site, site_info_lst in sorted(site_details.iteritems()):
+    for site, site_info_lst in sorted(site_details.items()):
         try:
             s = Site(site, site_info_lst, domain, country_default, banned_ces, max_processors)
         except Exception:
@@ -172,9 +172,9 @@ def remove_old_ces(removal_threshold=5, domain='LCG', banned_ces=None):
     today = date.today()
     base_path = cfgPath('/Resources/Sites', domain)
     removal_threshold = timedelta(days=removal_threshold)
-    for site, site_info in result['Value'].getAsDict(base_path).iteritems():
+    for site, site_info in result['Value'].getAsDict(base_path).items():
         site_path = cfgPath(base_path, site)
-        for ce, ce_info in site_info.get('CEs', {}).iteritems():
+        for ce, ce_info in site_info.get('CEs', {}).items():
             ce_path = cfgPath(site_path, 'CEs', ce)
 
             if 'LastSeen' not in ce_info:

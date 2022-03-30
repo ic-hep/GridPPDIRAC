@@ -8,8 +8,7 @@ from datetime import date
 from itertools import islice
 
 from DIRAC.ConfigurationSystem.Client.Helpers.Path import cfgPath
-from ConfigurationSystem import ConfigurationSystem
-# from .AutoResourceTools.ConfigurationSystem import ConfigurationSystem
+from GridPPDIRAC.ConfigurationSystem.private.AutoResourceTools.ConfigurationSystem import ConfigurationSystem
 from .ldaptools import in_, MockLdap as ldap
 
 
@@ -42,7 +41,7 @@ def _get_os_arch(ldap_conn, config_dict):
         os = "EL7"  # This is a temporary fix for above as no standard yet
 
         site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
-        for ce, info in config_dict[site].iteritems():
+        for ce, info in config_dict[site].items():
             current_arch = info.get("architecture", '')
             current_os = info.get("OS", '')
             info["architecture"] = "x86_64"
@@ -96,7 +95,7 @@ def _get_country_code(ce, default='xx', mapping=None):
                    'efda.org': 'uk',
                    'atlas-swt2.org': 'us'}
     ce = ce.strip().lower()
-    for key, value in mapping.iteritems():
+    for key, value in mapping.items():
         if ce.endswith(key):
             return value
     match = cc_regex.search(ce)
@@ -113,8 +112,8 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
     ldap_conn = ldap.open(*bdii_host)
     sites_root = '/Resources/Sites/LCG'
     cfg_system = ConfigurationSystem()
-    for (site, _), ce_info in sorted(_get_arc_ces(ldap_conn, max_processors).iteritems()):
-        for ce, info in ce_info.iteritems():
+    for (site, _), ce_info in sorted(_get_arc_ces(ldap_conn, max_processors).items()):
+        for ce, info in ce_info.items():
             if banned_ces is not None and ce in banned_ces:
                 continue
             # RAL T1: Ensure EL6 queue ('nordugrid-condor-grid3000M') is gone and any remaining queue gets an EL7 tag
@@ -130,7 +129,7 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
             if vo_list is not None:
                 logging.debug("Filtering out unwanted VOs from CE %s", ce)
                 # Filter VOs. first part of if is clever ruse to update in a comprehension (always returns None)
-                info["Queues"] = {key: val for key, val in info["Queues"].iteritems()
+                info["Queues"] = {key: val for key, val in info["Queues"].items()
                                   if (val.update(VO=val['VO'].intersection(vo_list)) or val['VO'])}
             if not info["Queues"]:
                 logging.warning("Skipping CE %s as it has no queues that support our VOs", ce)
@@ -138,8 +137,8 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
             # go forth and multiply
             old_queues = info["Queues"].copy()
             for queue in old_queues:
-                print queue
-                print info["Queues"][queue]
+                print(queue)
+                print(info["Queues"][queue])
                 # because DIRAC puts the queue name in the rsl, everything after the second hyphen needs to be unchanged
                 queue_bits = queue.split('-', 1)
                 multi_queue = "%s-multim%s" % (queue_bits[0], queue_bits[1])
@@ -158,7 +157,7 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
                 info["Queues"][multi_queue]["LocalCEType"] = "Pool"
             site_path = '.'.join(('LCG', site, _get_country_code(ce)))
             cfg_system.append_unique(cfgPath(sites_root, site_path), "CE", ce)
-            for option, value in info.iteritems():
+            for option, value in info.items():
                 cfg_system.add(cfgPath(sites_root, site_path, "CEs", ce), option, value)
     cfg_system.commit()
 
@@ -221,7 +220,7 @@ def _get_queues(ldap_conn, config_dict):
     return _get_vos(ldap_conn, queues_dict, config_dict)
 
 def dict_chunk(dct, size=1000):
-    it = dct.iteritems()
+    it = dct.items()
     for i in xrange(0, len(dct), size):
         yield {i: j for i, j in islice(it, size)}
 

@@ -103,7 +103,7 @@ class MultiVOMSService(object):
         '''List VO members'''
         try:
             result = self.__soapClients[vo]['Admin'].service.listMembers()
-        except Exception, e:
+        except Exception as e:
             return S_ERROR("Error in function listMembers: %s" % str(e))
         if 'listMembersReturn' in dir(result):
             return S_OK(_processListDictReturn(result.listMembersReturn))
@@ -113,7 +113,7 @@ class MultiVOMSService(object):
         '''List VO Roles'''
         try:
             result = self.__soapClients[vo]['Admin'].service.listRoles()
-        except Exception, e:
+        except Exception as e:
             return S_ERROR("Error in function listRoles: %s" % str(e))
         if 'listRolesReturn' in dir(result):
             return S_OK(_processListReturn(result.listRolesReturn))
@@ -124,7 +124,7 @@ class MultiVOMSService(object):
         try:
             result = self.__soapClients[vo]['Admin'].service\
                                                     .listUsersWithRole(group, role)
-        except Exception, e:
+        except Exception as e:
             return S_ERROR("Error in function listUsersWithRole: %s" % str(e))
         if result is None:
             return S_ERROR("listUsersWithRole SOAP service returned None")
@@ -136,6 +136,6 @@ class MultiVOMSService(object):
         '''Get VO name from VOMS'''
         try:
             result = self.__soapClients[vo]['Admin'].service.getVOName()
-        except Exception, e:
+        except Exception as e:
             return S_ERROR("Error in function getVOName: %s" % str(e))
         return S_OK(result)
