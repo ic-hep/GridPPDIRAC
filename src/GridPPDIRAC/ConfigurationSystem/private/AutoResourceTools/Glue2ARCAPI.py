@@ -221,7 +221,8 @@ def _get_queues(ldap_conn, config_dict):
 
 def dict_chunk(dct, size=1000):
     it = dct.items()
-    for i in xrange(0, len(dct), size):
+    # changed xrange to range for py2 to py3 transition
+    for i in range(0, len(dct), size):
         yield {i: j for i, j in islice(it, size)}
 
 def _get_vos(ldap_conn, queues_dict, config_dict):

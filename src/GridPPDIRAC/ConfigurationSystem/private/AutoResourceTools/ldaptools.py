@@ -48,7 +48,8 @@ class MockLdap(object):
                                                                 base=base,
                                                                 filterstr=filterstr)))
         ret = []
-        for dn, options in MockLdap.entry_regex.findall(stdout):
+        # stdout in py3 is bytes and find all doesn't work. Hope I got the decoding correct
+        for dn, options in MockLdap.entry_regex.findall(stdout.decode(encoding='utf-8', errors='strict')):
             d = defaultdict(list)
             for key, value in MockLdap.option_regex.findall(options):
                 d[key].append(value)
@@ -71,7 +72,8 @@ def in_(attrs, iterable):
         iterable (list): This is a list of single strings or a tuples of size len(attrs) if attrs is
                          a list.
     """
-    if isinstance(attrs, basestring):
+    # changed basestring to str for py2 to py3 transition
+    if isinstance(attrs, str):
         return "(|(" + ')('.join('='.join((attrs, value)) for value in iterable) + "))"
 
     inner_join = lambda values: ''.join(("(&(",
