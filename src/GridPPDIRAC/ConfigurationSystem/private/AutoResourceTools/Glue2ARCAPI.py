@@ -137,8 +137,6 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
             # go forth and multiply
             old_queues = info["Queues"].copy()
             for queue in old_queues:
-                print(queue)
-                print(info["Queues"][queue])
                 # because DIRAC puts the queue name in the rsl, everything after the second hyphen needs to be unchanged
                 queue_bits = queue.split('-', 1)
                 multi_queue = "%s-multim%s" % (queue_bits[0], queue_bits[1])
@@ -221,9 +219,8 @@ def _get_queues(ldap_conn, config_dict):
 
 def dict_chunk(dct, size=1000):
     it = dct.items()
-    # changed xrange to range for py2 to py3 transition
-    for i in range(0, len(dct), size):
-        yield {i: j for i, j in islice(it, size)}
+    for pos in range(0, len(dct), size):
+        yield {i: j for i, j in islice(it, pos, pos + size)}
 
 def _get_vos(ldap_conn, queues_dict, config_dict):
     for queues_dict_chunk in dict_chunk(queues_dict, 300):

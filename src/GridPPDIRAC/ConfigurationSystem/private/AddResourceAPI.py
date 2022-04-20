@@ -145,8 +145,8 @@ def update_ces(voList, domain='LCG', country_default='xx', host=None,
     for site, site_info_lst in sorted(site_details.items()):
         try:
             s = Site(site, site_info_lst, domain, country_default, banned_ces, max_processors)
-        except Exception:
-            gLogger.warn("Skipping problematic site: %s" % site)
+        except Exception as err:
+            gLogger.warn("Skipping problematic site: %s with error %s" % (site, err))
             continue
         s.write(cfg_system, cfgPath('/Resources/Sites', domain))
     cfg_system.commit()
