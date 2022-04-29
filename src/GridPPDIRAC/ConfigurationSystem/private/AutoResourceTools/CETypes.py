@@ -33,7 +33,7 @@ class Site(WritableMixin, namedtuple('Site', ('DiracName',
         ce_list = set()
         country_code = country_default
 
-        # We have to collect CE names across all VOs        
+        # We have to collect CE names across all VOs
         for site_info in site_info_lst:
             for ce, ce_info in sorted(site_info.get('CEs', {}).items()):
                if banned_ces is not None and ce in banned_ces:
@@ -50,9 +50,13 @@ class Site(WritableMixin, namedtuple('Site', ('DiracName',
 
         se_list = set(se for se in gConfig.getSections('/Resources/StorageElements').get('Value', [])
                       if se.startswith(site))
+        site_name = site_info_lst[0].get('GlueSiteName')
+        if not site_name:
+            raise RuntimeError("ERROR: no GlueSiteName available for site %s" %site)
+
         return super(Site, cls).__new__(cls,
                                         DiracName='.'.join((domain, site, country_code)),
-                                        Name=site_info_lst[0].get('GlueSiteName').strip(),
+                                        Name=site_name.strip(),
                                         CEs=ces,
                                         Description=site_info_lst[0].get('GlueSiteDescription').strip(),
                                         Coordinates=':'.join((site_info_lst[0].get('GlueSiteLongitude').strip(),
@@ -162,11 +166,11 @@ class Queue(WritableMixin, namedtuple('Queue', ('DiracName',
             acbr = queue_info.get('GlueCEAccessControlBaseRule')
             if not isinstance(acbr, (list, tuple, set)):
                 acbr = [acbr]
-            vo.update(rule.replace('VO:', '') for rule in acbr if rule.startswith('VO:'))
+            vo.update(rule.replace('VO:', '') for rule in acbr if rule and rule.startswith('VO:'))
 
         si00 = ''
         capability = queue_info.get('GlueCECapability', [])
-        if isinstance(capability, basestring):
+        if isinstance(capability, str):
             capability = [capability]
         for i in capability:
             if 'CPUScalingReferenceSI00' in i:
