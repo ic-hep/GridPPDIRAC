@@ -43,7 +43,7 @@ class MockLdap(object):
         Returns:
             list: list of (dn, attib_dict) for items matching the filterstr
         """
-        cmd = "ldapsearch -x -LLL -o ldif-wrap=no -h {host} -b {base!r} {filterstr!r}"
+        cmd = "ldapsearch -x -LLL -o ldif-wrap=no -H ldap://{host} -b {base!r} {filterstr!r}"
         stdout = subprocess.check_output(shlex.split(cmd.format(host=self._host,
                                                                 base=base,
                                                                 filterstr=filterstr)))
