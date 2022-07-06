@@ -103,6 +103,15 @@ def _get_htcondor_ces(ldap_conn, max_processors=None):
 
 
         num_cores = int(max_processors or 64)
+        # default time (HTCondor Glue2 does not advertise time)
+        maxCPUTime_default = int(2881) # 2 days + 1 min
+        for ce in get_endpoints(ldap_conn, domain_id, service_id):
+            if ce == "lcgce02.phy.bris.ac.uk":
+                maxCPUTime_site = int(11520) # 8 days
+            elif ce.endswith("pp.rl.ac.uk"):
+                maxCPUTime_site = int(4320) # RALPP 3 days
+            else:
+                maxCPUTime_site = maxCPUTime_default
         for ce in get_endpoints(ldap_conn, domain_id, service_id):
             htcondor_ces[(domain_id, service_id)][ce] = {"CEType": "HTCondorCE",
                                                          "SubmissionMode": "Direct",
@@ -117,7 +126,7 @@ def _get_htcondor_ces(ldap_conn, max_processors=None):
                                                                                                "SI00": 3100,
                                                                                                "MaxTotalJobs": 5000,  # 4 * (max_total_jobs or 1000),
                                                                                                "MaxWaitingJobs": 5000,  # 2 * (max_total_jobs or 1000),
-                                                                                               "maxCPUTime": 7777}}}
+                                                                                               "maxCPUTime": maxCPUTime_site}}}
     htcondor_ces = _get_vos(ldap_conn, htcondor_ces)
     htcondor_ces = _get_os_arch(ldap_conn, htcondor_ces)
     return htcondor_ces
