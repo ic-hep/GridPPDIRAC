@@ -9,7 +9,7 @@ from .utils import WritableMixin
 class NotIncludedError(Exception):
     pass
 
-
+# TODO: This does not handle Glue2 properly
 class Site(WritableMixin, namedtuple('Site', ('DiracName',
                                               'Name',
                                               'CEs',
@@ -50,20 +50,21 @@ class Site(WritableMixin, namedtuple('Site', ('DiracName',
 
         se_list = set(se for se in gConfig.getSections('/Resources/StorageElements').get('Value', [])
                       if se.startswith(site))
-        site_name = site_info_lst[0].get('GlueSiteName')
-        if not site_name:
-            raise RuntimeError("ERROR: no GlueSiteName available for site %s" %site)
-
+        # Work around glue1 to glue2 transition
+        site_name = site
+        # TODO: Coordinates and Mail need to be taken from the GOCDB
+        # Description can be dropped completely, but care needs to be taken that nothing else expects it
         return super(Site, cls).__new__(cls,
                                         DiracName='.'.join((domain, site, country_code)),
-                                        Name=site_name.strip(),
+                                        Name=site_name,
                                         CEs=ces,
-                                        Description=site_info_lst[0].get('GlueSiteDescription').strip(),
-                                        Coordinates=':'.join((site_info_lst[0].get('GlueSiteLongitude').strip(),
-                                                              site_info_lst[0].get('GlueSiteLatitude').strip())),
-                                        Mail=site_info_lst[0].get('GlueSiteSysAdminContact').replace('mailto:', '').strip(),
+                                        Description='LCG site',
+                                        Coordinates='0.0:0.0',
+                                        Mail='contact_info@GOCDB',
                                         CE=ce_list,
                                         SE=se_list)
+
+
 
     @classmethod
     def extract_cc(cls, ce, cc_mappings=None, cc_regex=None):
