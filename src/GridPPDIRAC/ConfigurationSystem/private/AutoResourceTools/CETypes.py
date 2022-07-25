@@ -32,7 +32,6 @@ class Site(WritableMixin, namedtuple('Site', ('DiracName',
         ces = []
         ce_list = set()
         country_code = country_default
-
         # We have to collect CE names across all VOs
         for site_info in site_info_lst:
             for ce, ce_info in sorted(site_info.get('CEs', {}).items()):
@@ -41,12 +40,13 @@ class Site(WritableMixin, namedtuple('Site', ('DiracName',
 
                if country_code == country_default:
                    country_code = Site.extract_cc(ce) or country_default
-
-               try:
-                   ces.append(CE(ce, ce_info, max_processors))
-                   ce_list.add(ce)
-               except NotIncludedError:
-                    pass
+        # We think this causes the extra half configured 'condor' queues to appear
+        # TODO (apart from the complete rewrite: make sure we can still ban CEs from the autoconfig
+        #       try:
+        #           ces.append(CE(ce, ce_info, max_processors))
+        #           ce_list.add(ce)
+        #       except NotIncludedError:
+        #           pass
 
         se_list = set(se for se in gConfig.getSections('/Resources/StorageElements').get('Value', [])
                       if se.startswith(site))
@@ -114,8 +114,9 @@ class CE(WritableMixin, namedtuple('CE', ('DiracName',
 
         num_cores = int(max_processors or ce_info.get('GlueHostArchitectureSMPSize', 1))
         # RAL HACKS.. cause T1, innit ?: Remove the EL6 queues ('nordugrid-Condor-grid3000M')
+        # TODO: Check if RAL still advertises their SL6 queues
         if ce.endswith('.gridpp.rl.ac.uk'):
-            queues_el7 =  [q for q in queues if q.DiracName == 'nordugrid-Condor-EL7']
+            queues_el7 = [q for q in queues if q.DiracName == 'nordugrid-Condor-EL7']
             return super(CE, cls).__new__(cls,
                                           DiracName=ce,
                                           Queues=queues_el7,
