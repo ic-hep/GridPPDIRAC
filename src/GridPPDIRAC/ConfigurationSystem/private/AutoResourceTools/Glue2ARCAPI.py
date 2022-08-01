@@ -146,6 +146,8 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
                 multi_tag_string = "MultiProcessor"
                 # go out on a limb and assume any queues that contain 'gpu' or 'GPU' are exactly that
                 if "gpu" in queue or "GPU" in queue:
+                    info["Queues"][queue]["Tag"] = "GPU"
+                    info["Queues"][queue]["RequiredTag"] = "GPU"
                     multi_tag_string = "MultiProcessor, GPU"
                 # Manchester SKA hack
                 if "hep.manchester.ac.uk" in ce and "himem" in queue:
