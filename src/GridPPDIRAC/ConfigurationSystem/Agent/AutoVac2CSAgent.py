@@ -129,7 +129,7 @@ class AutoVac2CSAgent(AgentModule):
             queue_path = cfgPath(ce_path, 'Queues', 'default')
             cfg_system.add(site_path, 'Name', sitename)
             cfg_system.append_unique(site_path, 'CE', hostname)
-            cfg_system.add(ce_path, 'CEType', site_path_prefix.capitalize())
+            cfg_system.add(ce_path, 'CEType', "VMCloud")
             cfg_system.add(ce_path, 'Architecture', 'x86_64')
             cfg_system.add(ce_path, 'OS', host_os)
             cfg_system.add(ce_path, 'LastSeen', date.today().strftime('%d/%m/%Y'))
