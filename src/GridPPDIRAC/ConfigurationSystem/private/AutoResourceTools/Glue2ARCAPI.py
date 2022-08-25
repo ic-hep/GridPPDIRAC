@@ -200,12 +200,12 @@ def _get_queues(ldap_conn, config_dict):
         domain_id, service_id = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
         ce = dn_ce2_regex.sub(r"\1", dn)
         maxCPUTime = int(attrs.get("GLUE2ComputingShareMaxCPUTime", [2940])[0])
-        maxWaitingJobs = int(attrs.get("GLUE2ComputingShareMaxWaitingJobs", [5000])[0])
+        maxWaitingJobs = int(attrs.get("GLUE2ComputingShareMaxWaitingJobs", [2000])[0])
         # Some sites specifically advertise 0 for Max jobs
-        # We'll default this to "4444" so it still works, but we can easily see that
-        # it isn't the "5000" default.
+        # We'll default this to "2222" so it still works, but we can easily see that
+        # it isn't the "2000" default.
         if not maxWaitingJobs:
-            maxWaitingJobs = 4444
+            maxWaitingJobs = 2222
         queue_id = attrs["GLUE2ShareID"][0]
         queue_name = '-'.join((queue_prefix.get((domain_id, service_id), ''),
                                attrs["GLUE2ComputingShareMappingQueue"][0]))
@@ -215,7 +215,7 @@ def _get_queues(ldap_conn, config_dict):
                    .get('Queues', {})[queue_name] = {"VO": set(),
                                                      "SI00": 3100,
                                                      "maxCPUTime": _tidy_time(maxCPUTime),
-                                                     "MaxTotalJobs": 2 * maxWaitingJobs,
+                                                     "MaxTotalJobs": maxWaitingJobs,
                                                      "MaxWaitingJobs": maxWaitingJobs}
     return _get_vos(ldap_conn, queues_dict, config_dict)
 
