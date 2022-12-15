@@ -73,7 +73,7 @@ def _get_arc_ces(ldap_conn, max_processors=None):
             continue
 
         num_cores = int(max_processors or 64)
-        arc_ces[(domain_id, service_id)][dn_ce2_regex.subn(r"\1", dn)[0]] = {"CEType": "ARC",
+        arc_ces[(domain_id, service_id)][dn_ce2_regex.subn(r"\1", dn)[0]] = {"CEType": "AREX",
                                                  "SubmissionMode": "Direct",
                                                  "wnTmpDir": '.',
                                                  "HostRAM": 4096,
@@ -116,16 +116,15 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
         for ce, info in ce_info.items():
             if banned_ces is not None and ce in banned_ces:
                 continue
-            # RAL T1: Ensure EL6 queue ('nordugrid-condor-grid3000M') is gone and any remaining queue gets an EL7 tag
-            if ce.endswith('.gridpp.rl.ac.uk'):
-                info['Queues'] = {k:v for (k,v) in info['Queues'].items() if k != 'nordugrid-condor-grid3000M'}
-                info['OS'] = 'EL7'
-            # End RAL T1 hack
             # Candian Sites
             # These require an extra JDL string in the pilot to set the default queue time & default memory
             if ce.endswith('.ca'):
                 info['XRSLExtraString'] = '(wallTime="1440")(memory>="3500")'
-            #
+            # TODO: RALPP runs AREX off an odd port; this information is in the bdii, awaiting re-write of this module
+            # until then: hack (note that RAL-LCG2 ends in gridpp.rl.ac.uk and uses the standard port)
+            if ce.endswith('.pp.rl.ac.uk'):
+                info['Port'] = 60000
+            # end RALPP hack
             if vo_list is not None:
                 logging.debug("Filtering out unwanted VOs from CE %s", ce)
                 # Filter VOs. first part of if is clever ruse to update in a comprehension (always returns None)
