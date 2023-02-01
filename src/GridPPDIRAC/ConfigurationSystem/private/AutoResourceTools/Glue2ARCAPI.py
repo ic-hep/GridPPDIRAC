@@ -119,7 +119,7 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
             # Candian Sites
             # These require an extra JDL string in the pilot to set the default queue time & default memory
             if ce.endswith('.ca'):
-                info['XRSLExtraString'] = '(wallTime="88000")(memory>="3500")'
+                info['XRSLExtraString'] = '(wallTime="88000")(memory>="3500")(runtimeenvironment="ENV/PROXY")'
             # TODO: RALPP runs AREX off an odd port; this information is in the bdii, awaiting re-write of this module
             # until then: hack (note that RAL-LCG2 ends in gridpp.rl.ac.uk and uses the standard port)
             if ce.endswith('.pp.rl.ac.uk'):
