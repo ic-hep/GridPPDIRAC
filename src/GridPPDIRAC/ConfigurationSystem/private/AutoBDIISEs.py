@@ -248,6 +248,9 @@ def update_ses(considered_vos=None, cfg_base_path='/Resources/StorageElements',
                     xroot_ap_index = srm_ap_index + 1
             ap_path = os.path.join(site_path, 'AccessProtocol.%s' % xroot_ap_index)
             cs.add(ap_path, 'Access', 'remote')
+            # RALPP xrootd host is different to SRM
+            if host == 'heplnx204.pp.rl.ac.uk':
+                host = 'mover.pp.rl.ac.uk'
             cs.add(ap_path, 'Host', host)
             cs.add(ap_path, 'Path', common_path)
             cs.add(ap_path, 'PluginName', 'GFAL2_XROOT')
