@@ -69,6 +69,8 @@ def _get_os_arch(ldap_conn, config_dict):
         for ce, info in config_dict[site].items():
             current_arch = info.get("architecture", '')
             current_os = info.get("OS", '')
+            if ce == "ceprod03.grid.hep.ph.ic.ac.uk":
+                os = "EL9"
             if os > current_os or arch > current_arch:
                 info["architecture"] = arch
                 info["OS"] = os
