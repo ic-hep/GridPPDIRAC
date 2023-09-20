@@ -35,17 +35,21 @@ def _get_os_arch(ldap_conn, config_dict):
                                                   "(GLUE2ExecutionEnvironmentPlatform=*))"):
 
         os = attrs["GLUE2ExecutionEnvironmentOSName"][0].lower()
-#        arch = attrs["GLUE2ExecutionEnvironmentPlatform"].lower()
+        arch = attrs["GLUE2ExecutionEnvironmentPlatform"][0].lower()
 #        os_version = attrs["GLUE2ExecutionEnvironmentOSVersion"]
 #        os = os_map.get(os, os) + os_version
         os = "EL7"  # This is a temporary fix for above as no standard yet
 
         site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
         for ce, info in config_dict[site].items():
+            os = "EL7"
             current_arch = info.get("architecture", '')
             current_os = info.get("OS", '')
-            info["architecture"] = "x86_64"
-            info["OS"] = os
+            if ce == "grendel.hec.lancs.ac.uk" or ce == "grendel2.hec.lancs.ac.uk":
+                os = "EL8"
+            if os > current_os or arch > current_arch:
+                info["architecture"] = "x86_64"
+                info["OS"] = os
     return config_dict
 
 
