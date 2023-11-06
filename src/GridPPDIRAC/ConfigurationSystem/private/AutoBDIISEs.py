@@ -19,7 +19,7 @@ LATENCY_MAPPING = {'online': 'disk',
                    'nearline': 'tape'}
 
 
-def ldapsearch_bdii_ses(address=('lcg-bdii.cern.ch', 2170),
+def ldapsearch_bdii_ses(address=('lcg-bdii.egi.eu', 2170),
                         base='Mds-Vo-name=local,o=grid',
                         scope=ldap.SCOPE_SUBTREE,
                         latency_mapping=None,
@@ -189,7 +189,7 @@ def ldapsearch_bdii_ses(address=('lcg-bdii.cern.ch', 2170),
 
 
 def update_ses(considered_vos=None, cfg_base_path='/Resources/StorageElements',
-               address=('lcg-bdii.cern.ch', 2170), banned_ses=None):
+               address=('lcg-bdii.egi.eu', 2170), banned_ses=None):
     """Update the list of Storage Elements in DIRAC config."""
     se_dict, _, srm_dict, xrootport_dict, vopaths_dict\
         = ldapsearch_bdii_ses(address=address,

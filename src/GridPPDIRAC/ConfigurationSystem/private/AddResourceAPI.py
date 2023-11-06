@@ -197,5 +197,5 @@ __all__ = ('update_ses', 'find_old_ses', 'update_ces', 'remove_old_ces')
 if __name__ == '__main__':
     from DIRAC.Core.Base import Script
     Script.parseCommandLine()
-    update_ses(vo='gridpp', host='lcg-bdii.cern.ch:2170')
-    update_ces(vo='gridpp', host='lcg-bdii.cern.ch:2170')
+    update_ses(vo='gridpp', host='lcg-bdii.egi.eu:2170')
+    update_ces(vo='gridpp', host='lcg-bdii.egi.eu:2170')
