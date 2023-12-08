@@ -39,13 +39,15 @@ def _get_os_arch(ldap_conn, config_dict):
         #os_version = attrs["GLUE2ExecutionEnvironmentOSVersion"]
         #os = os_map.get(os, os) + os_version
         EL8_CES = ["grendel2.hec.lancs.ac.uk"]
-
+        None_CES = ["arc-ce01.gridpp.rl.ac.uk", "arc-ce02.gridpp.rl.ac.uk", "arc-ce03.gridpp.rl.ac.uk", "arc-ce04.gridpp.rl.ac.uk", "arc-ce05.gridpp.rl.ac.uk"]
         site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
         for ce, info in config_dict[site].items():
             current_arch = info.get("architecture", '')
             current_os = info.get("OS", '')
             if ce in EL8_CES:
                 info["OS"] = "EL8"
+            elif ce in None_CES:
+                info["OS"] = "None"
             else:
                 info["OS"] = "EL7"
             info["architecture"] = "x86_64"
@@ -122,7 +124,8 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
             # Candian Sites
             # These require an extra JDL string in the pilot to set the default queue time & default memory
             if ce.endswith('.ca'):
-                info['XRSLExtraString'] = '(wallTime="88000")(memory>="3500")(runtimeenvironment="ENV/PROXY")'
+                # 23 h 58 min as requested
+                info['XRSLExtraString'] = '(wallTime="86280")(memory>="3500")(runtimeenvironment="ENV/PROXY")'
             # TODO: RALPP runs AREX off an odd port; this information is in the bdii, awaiting re-write of this module
             # until then: hack (note that RAL-LCG2 ends in gridpp.rl.ac.uk and uses the standard port)
             if ce.endswith('.pp.rl.ac.uk'):
@@ -139,6 +142,15 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
             if not info["Queues"]:
                 logging.warning("Skipping CE %s as it has no queues that support our VOs", ce)
                 continue
+            # add an extra element ("Platform") for the RAL-LCG2 queues and their one operating system per queue scheme
+            if ce.endswith('.gridpp.rl.ac.uk'):
+                for key in info["Queues"].keys():
+                    if key.endswith('EL7'):
+                        info["Queues"][key]["Platform"] = "EL7"
+                    elif key.endswith('EL8'):
+                        info["Queues"][key]["Platform"] = "EL8"
+                    else:
+                        info["Queues"][key]["Platform"] = "EL9"
             # go forth and multiply
             old_queues = info["Queues"].copy()
             for queue in old_queues:
