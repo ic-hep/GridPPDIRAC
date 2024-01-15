@@ -151,6 +151,11 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
                         info["Queues"][key]["Platform"] = "EL8"
                     else:
                         info["Queues"][key]["Platform"] = "EL9"
+            if ce.endswith('gla.scotgrid.ac.uk'):
+                for key in info["Queues"].keys():
+                     if key.endswith('condor_arm'):
+                         info["Queues"][key]["Tag"] = "ARM"
+                         info["Queues"][key]["RequiredTag"] = "ARM"
             # go forth and multiply
             old_queues = info["Queues"].copy()
             for queue in old_queues:
@@ -169,6 +174,9 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
                 # Manchester SKA hack
                 if "hep.manchester.ac.uk" in ce and "himem" in queue:
                     multi_tag_string = "MultiProcessor, skatelescope.eu.hmem"
+                # beware of the ARM queues at Glasgow
+                if "gla.scotgrid.ac.uk" in ce and "condor_arm" in queue:
+                    multi_tag_string = "MultiProcessor, ARM"
                 info["Queues"][multi_queue]["Tag"] = multi_tag_string
                 info["Queues"][multi_queue]["RequiredTag"] = multi_tag_string
                 info["Queues"][multi_queue]["LocalCEType"] = "Pool"
