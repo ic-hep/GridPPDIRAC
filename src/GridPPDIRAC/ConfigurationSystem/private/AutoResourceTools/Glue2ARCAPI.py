@@ -38,7 +38,8 @@ def _get_os_arch(ldap_conn, config_dict):
         arch = attrs["GLUE2ExecutionEnvironmentPlatform"][0].lower()
         #os_version = attrs["GLUE2ExecutionEnvironmentOSVersion"]
         #os = os_map.get(os, os) + os_version
-        EL8_CES = ["grendel2.hec.lancs.ac.uk"]
+        EL9_CES = ["heplnx208.pp.rl.ac.uk"]
+        EL8_CES = ["grendel2.hec.lancs.ac.uk", "ingrid.cism.ucl.ac.be"]
         None_CES = ["arc-ce01.gridpp.rl.ac.uk", "arc-ce02.gridpp.rl.ac.uk", "arc-ce03.gridpp.rl.ac.uk", "arc-ce04.gridpp.rl.ac.uk", "arc-ce05.gridpp.rl.ac.uk"]
         site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
         for ce, info in config_dict[site].items():
@@ -46,6 +47,8 @@ def _get_os_arch(ldap_conn, config_dict):
             current_os = info.get("OS", '')
             if ce in EL8_CES:
                 info["OS"] = "EL8"
+            elif ce in EL9_CES:
+                info["OS"] = "EL9"
             elif ce in None_CES:
                 info["OS"] = "None"
             else:
