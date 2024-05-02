@@ -69,7 +69,7 @@ def _get_os_arch(ldap_conn, config_dict):
             os = "EL7"  # This is a temporary fix for above as no standard yet
             current_arch = info.get("architecture", '')
             current_os = info.get("OS", '')
-            if ce in ("ceprod02.grid.hep.ph.ic.ac.uk", "ceprod03.grid.hep.ph.ic.ac.uk"):
+            if ce.endswith(".grid.hep.ph.ic.ac.uk"):
                 os = "EL9"
             if os > current_os or arch > current_arch:
                 info["architecture"] = arch
