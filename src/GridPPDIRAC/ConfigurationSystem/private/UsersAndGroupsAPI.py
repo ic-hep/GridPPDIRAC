@@ -93,6 +93,7 @@ class UsersAndGroupsAPI(object):
         dead_VO_groups = set()
         #groupsInVOMS = set()
         for vo in self._vomsSrv.vos:
+            gLogger.info('Processing information for %s VO...' % vo)
             ## Get the VO name from VOMS
             result = self._vomsSrv.admGetVOName(vo)
             if not result['OK']:

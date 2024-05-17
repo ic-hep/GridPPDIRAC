@@ -154,11 +154,14 @@ class AutoBdii2CSAgent(Bdii2CSAgent):
                 DIRAC AutoBDII2CS Agent
                 """).lstrip('\n') \
                     .format(ses='\n'.join(' - %s (%s)' % se for se in old_ses))
-                result = NotificationClient().sendMail(addresses=self.addressTo,
-                                                       subject='GridPP DIRAC Old SE Notification',
-                                                       body=body,
-                                                       fromAddress=self.addressFrom,
-                                                       localAttempt=False)
+                # we currently do not want these emails, as we ignore them anyway
+                #result = NotificationClient().sendMail(addresses=self.addressTo,
+                #                                       subject='GridPP DIRAC Old SE Notification',
+                #                                       body=body,
+                #                                       fromAddress=self.addressFrom,
+                #                                       localAttempt=False)
+                # put in a dummy return instead
+                result = {'OK': True}
                 if not result['OK']:
                     self.log.error('Failed to send old SEs e-mail: ', result['Message'])
 
