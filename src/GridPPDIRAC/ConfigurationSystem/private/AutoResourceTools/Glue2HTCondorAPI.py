@@ -148,6 +148,7 @@ def _get_country_code(ce, default='xx', mapping=None):
     match = cc_regex.search(ce)
     if match is not None:
         return match.groups()[0]
+    print(f"No country mapping found for CE {ce}")
     return default
 
 
@@ -160,6 +161,10 @@ def update_htcondor_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk",
     sites_root = '/Resources/Sites/LCG'
     cfg_system = ConfigurationSystem()
     for (site, _), ce_info in sorted(_get_htcondor_ces(ldap_conn, max_processors).items()):
+        # try to omit the special LHCB INFN-T1 Doppelgänger
+        if site == "INFN-CNAF-LHCB":
+            print("Trying to avoid updating INFN-CNAF-LHCB")
+            continue
         for ce, info in ce_info.items():
             if banned_ces is not None and ce in banned_ces:
                 continue
