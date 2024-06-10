@@ -131,8 +131,8 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
                 info['XRSLExtraString'] = '(wallTime="86280")(memory>="3500")(runtimeenvironment="ENV/PROXY")'
             # TODO: RALPP runs AREX off an odd port; this information is in the bdii, awaiting re-write of this module
             # until then: hack (note that RAL-LCG2 ends in gridpp.rl.ac.uk and uses the standard port)
-            if ce.endswith('.pp.rl.ac.uk'):
-                info['Port'] = 60000
+            # if ce.endswith('.pp.rl.ac.uk'):
+            #    info['Port'] = 60000
             # Another one for UCL: We should get this from GLUE2ComputingEndpoint
             if ce == 'ingrid.cism.ucl.ac.be':
                 info['Port'] = 8443
