@@ -38,7 +38,7 @@ def _get_os_arch(ldap_conn, config_dict):
         arch = attrs["GLUE2ExecutionEnvironmentPlatform"][0].lower()
         #os_version = attrs["GLUE2ExecutionEnvironmentOSVersion"]
         #os = os_map.get(os, os) + os_version
-        EL9_CES = ["heplnx208.pp.rl.ac.uk", "heplnx207.pp.rl.ac.uk", "heplnx206.pp.rl.ac.uk", "arcce02.esc.qmul.ac.uk",  "t2arc01.physics.ox.ac.uk", "ce02.gla.scotgrid.ac.uk", "ce2.gridpp.ecdf.ed.ac.uk"]
+        EL9_CES = ["heplnx208.pp.rl.ac.uk", "heplnx207.pp.rl.ac.uk", "heplnx206.pp.rl.ac.uk", "arcce01.esc.qmul.ac.uk", "arcce02.esc.qmul.ac.uk", "arcce03.esc.qmul.ac.uk", "t2arc01.physics.ox.ac.uk", "ce01.gla.scotgrid.ac.uk", "ce02.gla.scotgrid.ac.uk",  "ce03.gla.scotgrid.ac.uk", "ce04.gla.scotgrid.ac.uk", "ce2.gridpp.ecdf.ed.ac.uk"]
         EL8_CES = ["grendel2.hec.lancs.ac.uk", "ingrid.cism.ucl.ac.be"]
         None_CES = ["arc-ce01.gridpp.rl.ac.uk", "arc-ce02.gridpp.rl.ac.uk", "arc-ce03.gridpp.rl.ac.uk", "arc-ce04.gridpp.rl.ac.uk", "arc-ce05.gridpp.rl.ac.uk"]
         site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
@@ -156,9 +156,9 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
                         info["Queues"][key]["Platform"] = "EL9"
             if ce.endswith('gla.scotgrid.ac.uk'):
                 for key in info["Queues"].keys():
-                     if key.endswith('condor_arm'):
-                         info["Queues"][key]["Tag"] = "ARM"
-                         info["Queues"][key]["RequiredTag"] = "ARM"
+                    if key.endswith('condor_arm'):
+                        info["Queues"][key]["Tag"] = "ARM"
+                        info["Queues"][key]["RequiredTag"] = "ARM"
             # go forth and multiply
             old_queues = info["Queues"].copy()
             for queue in old_queues:
