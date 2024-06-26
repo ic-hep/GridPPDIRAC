@@ -21,11 +21,6 @@ class JobPlatform( OptimizerExecutor ):
   def optimizeJob( self, jid, jobState ):
     """ Process the job and set the platform if needed. """
 
-    def_plat = self.ex_getOption( 'GridPP_DefaultPlatform', '' )
-    if not def_plat:
-      # No default platform set, so don't do anything
-      return self.setNextOptimizer( jobState )
-
     result = jobState.getManifest()
     if not result["OK"]:
       # Failed to get the job manifest?
@@ -48,13 +43,6 @@ class JobPlatform( OptimizerExecutor ):
       except KeyError:
         pass # If Platforms doesn't exist, it doesn't matter.
       self.jobLog.info( "Removed job platform." )
-    elif not job_plat:
-      # User didn't set platform, user default
-      job_plat = def_plat
-      manifest.setOption( "Platform", def_plat )
-      # We also have to set the platform in the job requirements
-      requirements.setOption( "Platforms", def_plat )
-      self.jobLog.info( "Set job platform to default (%s)." % def_plat )
 
     return self.setNextOptimizer( jobState )
 
