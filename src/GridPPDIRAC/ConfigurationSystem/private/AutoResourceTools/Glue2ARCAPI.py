@@ -38,21 +38,21 @@ def _get_os_arch(ldap_conn, config_dict):
         arch = attrs["GLUE2ExecutionEnvironmentPlatform"][0].lower()
         #os_version = attrs["GLUE2ExecutionEnvironmentOSVersion"]
         #os = os_map.get(os, os) + os_version
-        EL9_CES = ["heplnx208.pp.rl.ac.uk", "heplnx207.pp.rl.ac.uk", "heplnx206.pp.rl.ac.uk", "arcce01.esc.qmul.ac.uk", "arcce02.esc.qmul.ac.uk", "arcce03.esc.qmul.ac.uk", "t2arc01.physics.ox.ac.uk", "ce01.gla.scotgrid.ac.uk", "ce02.gla.scotgrid.ac.uk",  "ce03.gla.scotgrid.ac.uk", "ce04.gla.scotgrid.ac.uk", "ce2.gridpp.ecdf.ed.ac.uk"]
+        EL7_CEs = ["lcg-ce2.uw.computecanada.ca", "lcg-ce3.uw.computecanada.ca", "hepgrid5.ph.liv.ac.uk"]
         EL8_CES = ["grendel2.hec.lancs.ac.uk", "ingrid.cism.ucl.ac.be"]
         None_CES = ["arc-ce01.gridpp.rl.ac.uk", "arc-ce02.gridpp.rl.ac.uk", "arc-ce03.gridpp.rl.ac.uk", "arc-ce04.gridpp.rl.ac.uk", "arc-ce05.gridpp.rl.ac.uk"]
         site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
         for ce, info in config_dict[site].items():
             current_arch = info.get("architecture", '')
             current_os = info.get("OS", '')
-            if ce in EL8_CES:
+            if ce in EL7_CES:
+                info["OS"] = "EL7"
+            elif ce in EL8_CES:
                 info["OS"] = "EL8"
-            elif ce in EL9_CES:
-                info["OS"] = "EL9"
             elif ce in None_CES:
                 info["OS"] = "None"
             else:
-                info["OS"] = "EL7"
+                info["OS"] = "EL9"
             info["architecture"] = "x86_64"
     return config_dict
 
@@ -129,14 +129,9 @@ def update_arc_ces(vo_list=None, bdii_host=("topbdii.grid.hep.ph.ic.ac.uk", 2170
             if ce.endswith('.ca'):
                 # 23 h 58 min as requested
                 info['XRSLExtraString'] = '(wallTime="86280")(memory>="3500")(runtimeenvironment="ENV/PROXY")'
-            # TODO: RALPP runs AREX off an odd port; this information is in the bdii, awaiting re-write of this module
-            # until then: hack (note that RAL-LCG2 ends in gridpp.rl.ac.uk and uses the standard port)
-            # if ce.endswith('.pp.rl.ac.uk'):
-            #    info['Port'] = 60000
-            # Another one for UCL: We should get this from GLUE2ComputingEndpoint
+            # AREX, non-standard port at UCL: We should get this from GLUE2ComputingEndpoint
             if ce == 'ingrid.cism.ucl.ac.be':
                 info['Port'] = 8443
-            # end RALPP hack
             if vo_list is not None:
                 logging.debug("Filtering out unwanted VOs from CE %s", ce)
                 # Filter VOs. first part of if is clever ruse to update in a comprehension (always returns None)

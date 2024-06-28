@@ -66,11 +66,9 @@ def _get_os_arch(ldap_conn, config_dict):
 
         site = dn_site_regex.sub(r"\1", dn), dn_ce_regex.sub(r"\1", dn)
         for ce, info in config_dict[site].items():
-            os = "EL7"  # This is a temporary fix for above as no standard yet
+            os = "EL9"  # This is now the default
             current_arch = info.get("architecture", '')
             current_os = info.get("OS", '')
-            if ce.endswith(".grid.hep.ph.ic.ac.uk"):
-                os = "EL9"
             if os > current_os or arch > current_arch:
                 info["architecture"] = arch
                 info["OS"] = os

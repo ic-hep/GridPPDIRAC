@@ -112,12 +112,12 @@ class AutoVac2CSAgent(AgentModule):
             if nodestatus != 'Y':
                 continue
             # Try to use OS from GOC DB if defined
-            raw_host_os = service.get('HOST_OS', 'EL7')
+            raw_host_os = service.get('HOST_OS', 'EL9')
             os_match = re.match(r'.*[A-Za-z]([0-9])$', raw_host_os)
             if os_match:
               host_os = 'EL%s' % os_match.group(1)
             else:
-              host_os = 'EL7'
+              host_os = 'EL9'
             country_code = AutoVac2CSAgent.extract_cc(hostname) or country_default
             if sitename is None or hostname is None:
                 self.log.warn("Missing sitename or hostname for service:\n%s" % pformat(service))
