@@ -106,6 +106,7 @@ def _get_htcondor_ces(ldap_conn, max_processors=None):
         # default time (HTCondor Glue2 does not advertise time)
         maxCPUTime_default = int(2881) # 2 days + 1 min
         # need to check what get_endpoints actually does
+        # All HTCondorCEs now get a token tag, so we never lose CERN again
         for ce in get_endpoints(ldap_conn, domain_id, service_id):
             if ce == "lcgce02.phy.bris.ac.uk":
                 maxCPUTime_site = int(11520) # 8 days
@@ -123,6 +124,7 @@ def _get_htcondor_ces(ldap_conn, max_processors=None):
                                                          "LastSeen": date.today().strftime('%d/%m/%Y'),
                                                          "UseLocalSchedd": False,
                                                          "DaysToKeepLogs": 2,
+                                                         "Tag" : "Token",
                                                          "Queues": {'-'.join((ce, 'condor')): {"VO": set(),
                                                                                                "SI00": 3100,
                                                                                                "MaxTotalJobs": 5000,  # 4 * (max_total_jobs or 1000),
