@@ -127,8 +127,8 @@ def _get_htcondor_ces(ldap_conn, max_processors=None):
                                                          "Tag" : "Token",
                                                          "Queues": {'-'.join((ce, 'condor')): {"VO": set(),
                                                                                                "SI00": 3100,
-                                                                                               "MaxTotalJobs": 5000,  # 4 * (max_total_jobs or 1000),
-                                                                                               "MaxWaitingJobs": 5000,  # 2 * (max_total_jobs or 1000),
+                                                                                               "MaxTotalJobs": 7500,
+                                                                                               "MaxWaitingJobs": 5000,
                                                                                                "maxCPUTime": maxCPUTime_site}}}
     htcondor_ces = _get_vos(ldap_conn, htcondor_ces)
     htcondor_ces = _get_os_arch(ldap_conn, htcondor_ces)

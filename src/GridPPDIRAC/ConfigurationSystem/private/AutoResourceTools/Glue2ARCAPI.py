@@ -225,10 +225,12 @@ def _get_queues(ldap_conn, config_dict):
         maxCPUTime = int(attrs.get("GLUE2ComputingShareMaxCPUTime", [2940])[0])
         maxWaitingJobs = int(attrs.get("GLUE2ComputingShareMaxWaitingJobs", [2000])[0])
         # Some sites specifically advertise 0 for Max jobs
-        # We'll default this to "2222" so it still works, but we can easily see that
-        # it isn't the "2000" default.
-        if not maxWaitingJobs:
-            maxWaitingJobs = 2222
+        # As it turns out, sites also often advertize MaxWaitingJobs in numbers they can't handle
+        # HTCondorCEs has a maximum of MaxWaitingJobs of 5000 for a long time, so enforce that
+        # here too.
+        if not maxWaitingJobs or maxWaitingJobs > 5000:
+            maxWaitingJobs = 5000
+        maxTotalJobs = int(1.5 * maxWaitingJobs)
         queue_id = attrs["GLUE2ShareID"][0]
         queue_name = '-'.join((queue_prefix.get((domain_id, service_id), ''),
                                attrs["GLUE2ComputingShareMappingQueue"][0]))
@@ -238,7 +240,7 @@ def _get_queues(ldap_conn, config_dict):
                    .get('Queues', {})[queue_name] = {"VO": set(),
                                                      "SI00": 3100,
                                                      "maxCPUTime": _tidy_time(maxCPUTime),
-                                                     "MaxTotalJobs": maxWaitingJobs,
+                                                     "MaxTotalJobs": maxTotalJobs,
                                                      "MaxWaitingJobs": maxWaitingJobs}
     return _get_vos(ldap_conn, queues_dict, config_dict)
 
