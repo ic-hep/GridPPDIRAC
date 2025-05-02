@@ -33,7 +33,8 @@ class MatcherHandler(CoreMatcherHandler):
     if 'Platform' in resourceDescription:
       node_plat = resourceDescription['Platform']
       for plain_plat, dirac_plat in plats.items():
-        if dirac_plat == node_plat:
+        dplat_list = [x.strip() for x in dirac_plat.split(",")]
+        if node_plat in dplat_list:
           node_plat = plain_plat
           break
       resourceDescription['Platform'] = node_plat
