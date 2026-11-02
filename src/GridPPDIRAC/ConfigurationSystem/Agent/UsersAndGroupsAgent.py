@@ -29,13 +29,4 @@ class UsersAndGroupsAgent(AgentModule):
         """
         General agent execution method
         """
-        result = self._uag.update_usersandgroups()
-        if not result['OK']:
-            return result
-
-        # LFC Check
-        if self.am_getOption("LFCCheckEnabled", True):
-            result = self.checkLFCRegisteredUsers(result['Value'])
-            if not result['OK']:
-                return result
-        return S_OK()
+        return self._uag.update_usersandgroups()
