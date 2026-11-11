@@ -25,6 +25,9 @@ pip-log.txt
 .settings
 .metadata
 
+# VSCode
+.vscode
+
 # Vim 
 .*.sw[a-z]
 *.un~
