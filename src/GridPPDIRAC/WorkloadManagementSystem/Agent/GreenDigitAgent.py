@@ -6,7 +6,7 @@ import os
 
 import requests
 
-from DIRAC import S_ERROR, S_OK
+from DIRAC import S_ERROR, S_OK, gConfig
 from DIRAC.Core.Base.AgentModule import AgentModule
 from DIRAC.WorkloadManagementSystem.Client.JobMonitoringClient import JobMonitoringClient
 from DIRAC.WorkloadManagementSystem.Client import JobStatus
@@ -71,6 +71,16 @@ class GreenDigitAgent(AgentModule):
 		self.timestamp_file = os.path.join(self.am_getWorkDirectory(), "green_digit_last_end_time")
 		self.job_monitoring_client = JobMonitoringClient()
 		self.log.info("GreenDigitAgent initialized: completed-job reporting via JobMonitoringClient")
+		for section in dict.fromkeys(
+			(self.am_getModuleParam("section"), self.am_getModuleParam("loadSection"))
+		):
+			self.log.info("Agent configuration section: %s" % section)
+			for option in ("DryRun", "LogLevel"):
+				result = gConfig.getOption("%s/%s" % (section, option))
+				self.log.info(
+					"Configuration %s/%s: %r"
+					% (section, option, result["Value"] if result["OK"] else "<missing>")
+				)
 		self.log.info("CollectorBaseURL: %s" % self.collector_base_url)
 		self.log.info("PollingTime: %s seconds" % self.am_getOption("PollingTime"))
 		self.log.info("CollectorFieldsRefreshCycles: %s" % self.collector_fields_refresh_cycles)
