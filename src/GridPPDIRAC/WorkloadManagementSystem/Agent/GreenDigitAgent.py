@@ -70,6 +70,11 @@ class GreenDigitAgent(AgentModule):
 		self.cycles_since_fields_refresh = 0
 		self.timestamp_file = os.path.join(self.am_getWorkDirectory(), "green_digit_last_end_time")
 		self.job_monitoring_client = JobMonitoringClient()
+		self.log.debug("CollectorBaseURL: %s" % self.collector_base_url)
+		self.log.debug("PollingTime: %s" % self.am_getOption("PollingTime"))
+		self.log.debug("CollectorFieldsRefreshCycles: %s" % self.collector_fields_refresh_cycles)
+		self.log.debug("DryRun: %s" % self.dry_run)
+		self.log.debug("CollectorCAPath: %s" % self.collector_ca_path)
 		return S_OK()
 
 	def get_collector_health(self):
