@@ -70,6 +70,7 @@ def test_execute_refreshes_job_fields_every_configured_cycles():
     agent.collector_api_key = "test-api-key"
     agent.dry_run = False
     agent.collector_ca_path = "/test/igtf-cas"
+    agent.log = Mock()
     agent.get_collector_job_fields = Mock(return_value=S_OK({"job_parameter_keys": [],
                                                               "job_attribute_keys": []}))
     agent._read_checkpoint = Mock(return_value=datetime(2026, 11, 6, 0, 0, 0))

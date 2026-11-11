@@ -70,11 +70,18 @@ class GreenDigitAgent(AgentModule):
 		self.cycles_since_fields_refresh = 0
 		self.timestamp_file = os.path.join(self.am_getWorkDirectory(), "green_digit_last_end_time")
 		self.job_monitoring_client = JobMonitoringClient()
-		self.log.debug("CollectorBaseURL: %s" % self.collector_base_url)
-		self.log.debug("PollingTime: %s" % self.am_getOption("PollingTime"))
-		self.log.debug("CollectorFieldsRefreshCycles: %s" % self.collector_fields_refresh_cycles)
-		self.log.debug("DryRun: %s" % self.dry_run)
-		self.log.debug("CollectorCAPath: %s" % self.collector_ca_path)
+		self.log.info("GreenDigitAgent initialized: completed-job reporting via JobMonitoringClient")
+		self.log.info("CollectorBaseURL: %s" % self.collector_base_url)
+		self.log.info("PollingTime: %s seconds" % self.am_getOption("PollingTime"))
+		self.log.info("CollectorFieldsRefreshCycles: %s" % self.collector_fields_refresh_cycles)
+		self.log.info("DryRun: %s" % self.dry_run)
+		self.log.info("CollectorCAPath: %s" % (self.collector_ca_path or "not configured"))
+		self.log.info("CollectorAPIKey: %s" % ("configured" if self.collector_api_key else "not configured"))
+		self.log.info("Checkpoint file: %s" % self.timestamp_file)
+		if self.dry_run:
+			self.log.info("Dry run: payloads logged at VERBOSE; no POSTs or checkpoint updates")
+		else:
+			self.log.info("Live reporting: checkpoint advances only after HTTP 202 acceptance")
 		return S_OK()
 
 	def get_collector_health(self):
@@ -271,6 +278,7 @@ class GreenDigitAgent(AgentModule):
 		if not job_result["OK"]:
 			return job_result
 		job_ids = job_result["Value"]
+		self.log.info("Monitoring returned %s final-job candidates" % len(job_ids))
 		if not job_ids:
 			return S_OK()
 
@@ -289,6 +297,7 @@ class GreenDigitAgent(AgentModule):
 			if since < end_exec_time <= until:
 				jobs_to_report.append((end_exec_time, int(job_id), attributes))
 		jobs_to_report.sort(key=lambda job: (job[0], job[1]))
+		self.log.info("Jobs in EndExecTime window: %s" % len(jobs_to_report))
 		if not jobs_to_report:
 			return S_OK()
 
@@ -322,10 +331,22 @@ class GreenDigitAgent(AgentModule):
 			if not checkpoint_result["OK"]:
 				return checkpoint_result
 
+		self.log.info(
+			"%s %s jobs; checkpoint %s"
+			% (
+				"Dry-run built payloads for" if self.dry_run else "Collector accepted",
+				len(jobs_to_report),
+				"unchanged" if self.dry_run else "updated",
+			)
+		)
 		return S_OK()
 
 	def execute(self):
 		"""Run one polling cycle."""
+		self.log.info(
+			"Starting GreenDigit cycle: DryRun=%s, API key configured=%s"
+			% (self.dry_run, bool(self.collector_api_key))
+		)
 		if (
 			self.collector_job_fields is None
 			or self.cycles_since_fields_refresh >= self.collector_fields_refresh_cycles
@@ -348,4 +369,5 @@ class GreenDigitAgent(AgentModule):
 		since = self._read_checkpoint(now)
 		if isinstance(since, dict) and not since["OK"]:
 			return since
+		self.log.info("EndExecTime window (UTC): (%s, %s]" % (since.isoformat(), now.isoformat()))
 		return self._report_completed_jobs(since, now)
