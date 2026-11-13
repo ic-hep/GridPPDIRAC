@@ -35,8 +35,6 @@ PARAMETER_FIELD_MAP = {
 ATTRIBUTE_FIELD_MAP = {
 	"JobGroup": "JobGroup",
 	"JobName": "JobName",
-	"Owner": "Owner",
-	"OwnerDN": "OwnerDN",
 	"OwnerGroup": "OwnerGroup",
 	"RescheduleCounter": "RescheduleCounter",
 	"Site": "Site",
@@ -70,6 +68,7 @@ class GreenDigitAgent(AgentModule):
 		self.cycles_since_fields_refresh = 0
 		self.timestamp_file = os.path.join(self.am_getWorkDirectory(), "green_digit_last_end_time")
 		self.job_monitoring_client = JobMonitoringClient()
+		self.log.info("============================================================================")
 		self.log.info("GreenDigitAgent initialized: completed-job reporting via JobMonitoringClient")
 		self.log.info("CollectorBaseURL: %s" % self.collector_base_url)
 		self.log.info("PollingTime: %s seconds" % self.am_getOption("PollingTime"))
@@ -266,6 +265,16 @@ class GreenDigitAgent(AgentModule):
 				response.status_code, response.text
 			)
 			self.log.error(message)
+			if response.status_code in (401, 422):
+				reason = (
+					"authentication failed"
+					if response.status_code == 401
+					else "rejected the job payload"
+				)
+				self.log.error("Stopping GreenDigitAgent because collector %s" % reason)
+				self.am_createStopAgentFile()
+			elif response.status_code == 503:
+				self.log.error("Collector returned HTTP 503; job will be retried next cycle")
 			return S_ERROR(message)
 		return S_OK(response.text)
 
@@ -316,11 +325,11 @@ class GreenDigitAgent(AgentModule):
 			)
 			if not payload_result["OK"]:
 				return payload_result
+			self.log.verbose(
+				"Payload for job %s:\n%s"
+				% (job_id, json.dumps(payload_result["Value"], indent=2, sort_keys=True))
+			)
 			if self.dry_run:
-				self.log.verbose(
-					"Dry-run payload for job %s:\n%s"
-					% (job_id, json.dumps(payload_result["Value"], indent=2, sort_keys=True))
-				)
 				continue
 
 			submission_result = self._post_job(payload_result["Value"])
