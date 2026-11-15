@@ -8,6 +8,7 @@ import requests
 
 from DIRAC import S_ERROR, S_OK
 from DIRAC.Core.Base.AgentModule import AgentModule
+from DIRAC.Core.Security import Locations
 from DIRAC.WorkloadManagementSystem.Client.JobMonitoringClient import JobMonitoringClient
 from DIRAC.WorkloadManagementSystem.Client import JobStatus
 
@@ -57,8 +58,12 @@ class GreenDigitAgent(AgentModule):
 		self.collector_api_key = self.am_getOption("CollectorAPIKey", "")
 		self.dry_run = self.am_getOption("DryRun", False)
 		self.collector_ca_path = self.am_getOption(
-			"CollectorCAPath", os.environ.get("X509_CERT_DIR")
+			"CollectorCAPath", Locations.getCAsLocation()
 		)
+		if not self.collector_ca_path:
+			message = "IGTF CA bundle is not configured; configure DIRAC CA locations or CollectorCAPath"
+			self.log.error(message)
+			return S_ERROR(message)
 		self.collector_fields_refresh_cycles = int(
 			self.am_getOption("CollectorFieldsRefreshCycles", 2)
 		)
@@ -85,11 +90,6 @@ class GreenDigitAgent(AgentModule):
 
 	def get_collector_health(self):
 		"""Return the collector health response."""
-		if not self.collector_ca_path:
-			return S_ERROR(
-				"IGTF CA bundle is not configured; set CollectorCAPath or X509_CERT_DIR"
-			)
-
 		url = "%s/health" % self.collector_base_url.rstrip("/")
 		try:
 			response = requests.get(
@@ -117,11 +117,6 @@ class GreenDigitAgent(AgentModule):
 
 	def get_collector_job_fields(self):
 		"""Return the collector's accepted job parameter and attribute names."""
-		if not self.collector_ca_path:
-			return S_ERROR(
-				"IGTF CA bundle is not configured; set CollectorCAPath or X509_CERT_DIR"
-			)
-
 		url = "%s/job-fields" % self.collector_base_url.rstrip("/")
 		try:
 			response = requests.get(
@@ -241,10 +236,6 @@ class GreenDigitAgent(AgentModule):
 		"""Submit one job record to the collector."""
 		if not self.collector_api_key:
 			return S_ERROR("CollectorAPIKey is not configured")
-		if not self.collector_ca_path:
-			return S_ERROR(
-				"IGTF CA bundle is not configured; set CollectorCAPath or X509_CERT_DIR"
-			)
 
 		url = "%s/jobs" % self.collector_base_url.rstrip("/")
 		try:
@@ -369,10 +360,6 @@ class GreenDigitAgent(AgentModule):
 		self.cycles_since_fields_refresh += 1
 		if not self.dry_run and not self.collector_api_key:
 			return S_ERROR("CollectorAPIKey is not configured")
-		if not self.collector_ca_path:
-			return S_ERROR(
-				"IGTF CA bundle is not configured; set CollectorCAPath or X509_CERT_DIR"
-			)
 
 		now = datetime.now(timezone.utc).replace(tzinfo=None)
 		since = self._read_checkpoint(now)

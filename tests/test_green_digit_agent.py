@@ -34,6 +34,53 @@ def test_get_collector_health():
     )
 
 
+def test_initialize_uses_dirac_ca_location_by_default():
+    """Use DIRAC's configured CA path when no collector-specific path is set."""
+    agent = GreenDigitAgent.__new__(GreenDigitAgent)
+    agent.am_setOption = Mock()
+    agent.am_getOption = Mock(side_effect=lambda _name, default=None: default)
+    agent.am_getWorkDirectory = Mock(return_value="/tmp/green-digit")
+    agent.log = Mock()
+
+    with (
+        patch(
+            "GridPPDIRAC.WorkloadManagementSystem.Agent.GreenDigitAgent.Locations.getCAsLocation",
+            return_value="/dirac/ca-bundle",
+        ),
+        patch(
+            "GridPPDIRAC.WorkloadManagementSystem.Agent.GreenDigitAgent.JobMonitoringClient"
+        ),
+    ):
+        result = agent.initialize()
+
+    assert result["OK"]
+    assert agent.collector_ca_path == "/dirac/ca-bundle"
+
+
+def test_initialize_fails_when_no_ca_location_is_configured():
+    """Fail startup when neither a collector CA path nor DIRAC CAs exist."""
+    agent = GreenDigitAgent.__new__(GreenDigitAgent)
+    agent.am_setOption = Mock()
+    agent.am_getOption = Mock(side_effect=lambda _name, default=None: default)
+    agent.log = Mock()
+
+    with (
+        patch(
+            "GridPPDIRAC.WorkloadManagementSystem.Agent.GreenDigitAgent.Locations.getCAsLocation",
+            return_value=None,
+        ),
+        patch(
+            "GridPPDIRAC.WorkloadManagementSystem.Agent.GreenDigitAgent.JobMonitoringClient"
+        ) as job_monitoring_client,
+    ):
+        result = agent.initialize()
+
+    assert not result["OK"]
+    assert "IGTF CA bundle is not configured" in result["Message"]
+    agent.log.error.assert_called_once_with(result["Message"])
+    job_monitoring_client.assert_not_called()
+
+
 def test_get_collector_job_fields():
     """Fetch the collector's accepted field names without authentication."""
     agent = GreenDigitAgent.__new__(GreenDigitAgent)
