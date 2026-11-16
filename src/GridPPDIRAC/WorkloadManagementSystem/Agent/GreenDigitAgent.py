@@ -264,17 +264,14 @@ class GreenDigitAgent(AgentModule):
 				response.status_code, response.text
 			)
 			self.log.error(message)
-			if response.status_code in (401, 422):
-				reason = (
-					"authentication failed"
-					if response.status_code == 401
-					else "rejected the job payload"
-				)
-				self.log.error("Stopping GreenDigitAgent because collector %s" % reason)
+			result = S_ERROR(message)
+			result["StatusCode"] = response.status_code
+			if response.status_code == 401:
+				self.log.error("Stopping GreenDigitAgent because collector authentication failed")
 				self.am_createStopAgentFile()
 			elif response.status_code == 503:
 				self.log.error("Collector returned HTTP 503; job will be retried next cycle")
-			return S_ERROR(message)
+			return result
 		return S_OK(response.text)
 
 	def _report_completed_jobs(self, since, until):
@@ -316,10 +313,11 @@ class GreenDigitAgent(AgentModule):
 		parameters_by_job = parameter_result["Value"]
 
 		for end_exec_time, job_id, attributes in jobs_to_report:
+			parameters = parameters_by_job.get(int(job_id), {})
 			payload_result = self.build_payload(
 				job_id,
 				attributes,
-				parameters_by_job.get(int(job_id), {}),
+				parameters,
 				self.collector_job_fields,
 			)
 			if not payload_result["OK"]:
@@ -332,6 +330,41 @@ class GreenDigitAgent(AgentModule):
 				continue
 
 			submission_result = self._post_job(payload_result["Value"])
+			if not submission_result["OK"] and submission_result.get("StatusCode") == 422:
+				self.log.notice(
+					"Collector rejected job %s with HTTP 422; refreshing fields and retrying once"
+					% job_id
+				)
+				fields_result = self.get_collector_job_fields()
+				if not fields_result["OK"]:
+					self.log.error(
+						"Stopping GreenDigitAgent: cannot refresh collector fields after HTTP 422"
+					)
+					self.am_createStopAgentFile()
+					return fields_result
+				self.collector_job_fields = fields_result["Value"]
+
+				payload_result = self.build_payload(
+					job_id,
+					attributes,
+					parameters,
+					self.collector_job_fields,
+				)
+				if not payload_result["OK"]:
+					self.log.error("Stopping GreenDigitAgent because the refreshed payload is invalid")
+					self.am_createStopAgentFile()
+					return payload_result
+
+				self.log.verbose(
+					"Refreshed payload for job %s:\n%s"
+					% (job_id, json.dumps(payload_result["Value"], indent=2, sort_keys=True))
+				)
+				submission_result = self._post_job(payload_result["Value"])
+				if not submission_result["OK"] and submission_result.get("StatusCode") == 422:
+					self.log.error(
+						"Stopping GreenDigitAgent because collector rejected the refreshed payload"
+					)
+					self.am_createStopAgentFile()
 			if not submission_result["OK"]:
 				return submission_result
 

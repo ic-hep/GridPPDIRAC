@@ -137,8 +137,8 @@ def test_post_job_stops_agent_on_unauthorized_response():
     )
 
 
-def test_post_job_stops_agent_on_unprocessable_payload():
-    """Stop the agent gracefully when the collector rejects a job payload."""
+def test_post_job_returns_status_for_unprocessable_payload():
+    """Leave a 422 decision to the caller so it can refresh and retry."""
     agent = GreenDigitAgent.__new__(GreenDigitAgent)
     agent.collector_api_key = "test-api-key"
     agent.collector_ca_path = "/test/igtf-cas"
@@ -155,8 +155,135 @@ def test_post_job_stops_agent_on_unprocessable_payload():
 
     assert not result["OK"]
     assert "HTTP 422" in result["Message"]
-    agent.log.error.assert_any_call("Stopping GreenDigitAgent because collector rejected the job payload")
+    assert result["StatusCode"] == 422
+    agent.am_createStopAgentFile.assert_not_called()
+
+
+def test_report_completed_jobs_refreshes_fields_and_retries_422_once():
+    """Refresh field metadata after 422, rebuild the payload, and retry once."""
+    agent = GreenDigitAgent.__new__(GreenDigitAgent)
+    agent.job_monitoring_client = Mock()
+    agent.job_monitoring_client.getJobs.return_value = S_OK([10])
+    end_exec_time = datetime(2026, 11, 6, 14, 30)
+    attributes = {10: {"EndExecTime": end_exec_time}}
+    agent.job_monitoring_client.getJobsSummary.return_value = S_OK(attributes)
+    parameters = {10: {"HostName": "worker", "CPUNormalizationFactor": 1000}}
+    agent.job_monitoring_client.getJobParameters.return_value = S_OK(parameters)
+    agent.collector_job_fields = {
+        "job_parameter_keys": ["JobID", "HostName", "CPUNormalizationFactor"],
+        "job_attribute_keys": ["EndExecTime"],
+    }
+    agent.get_collector_job_fields = Mock(
+        return_value=S_OK(
+            {
+                "job_parameter_keys": ["JobID", "HostName"],
+                "job_attribute_keys": ["EndExecTime"],
+            }
+        )
+    )
+    agent.collector_api_key = "test-api-key"
+    agent.collector_ca_path = "/test/igtf-cas"
+    agent.collector_base_url = "https://collector.example/job-reporting"
+    agent.dry_run = False
+    agent.log = Mock()
+    agent.am_createStopAgentFile = Mock()
+    agent._write_checkpoint = Mock(return_value=S_OK())
+    responses = [
+        Mock(status_code=422, text="Unknown parameter"),
+        Mock(status_code=202, text="accepted"),
+    ]
+    since = datetime(2026, 11, 6, 14, 0)
+    until = datetime(2026, 11, 6, 15, 0)
+
+    with patch(
+        "GridPPDIRAC.WorkloadManagementSystem.Agent.GreenDigitAgent.requests.post",
+        side_effect=responses,
+    ) as post:
+        result = agent._report_completed_jobs(since, until)
+
+    assert result["OK"]
+    assert post.call_count == 2
+    assert "CPUNormalizationFactor" in post.call_args_list[0].kwargs["json"]["job_parameters"]
+    assert "CPUNormalizationFactor" not in post.call_args_list[1].kwargs["json"]["job_parameters"]
+    agent.get_collector_job_fields.assert_called_once_with()
+    agent.am_createStopAgentFile.assert_not_called()
+    agent._write_checkpoint.assert_called_once_with(end_exec_time)
+
+
+def test_report_completed_jobs_stops_after_refreshed_payload_still_gets_422():
+    """Stop after one refreshed-payload retry is rejected again."""
+    agent = GreenDigitAgent.__new__(GreenDigitAgent)
+    agent.job_monitoring_client = Mock()
+    agent.job_monitoring_client.getJobs.return_value = S_OK([10])
+    agent.job_monitoring_client.getJobsSummary.return_value = S_OK(
+        {10: {"EndExecTime": datetime(2026, 11, 6, 14, 30)}}
+    )
+    agent.job_monitoring_client.getJobParameters.return_value = S_OK({10: {}})
+    fields = {"job_parameter_keys": ["JobID"], "job_attribute_keys": ["EndExecTime"]}
+    agent.collector_job_fields = fields
+    agent.get_collector_job_fields = Mock(return_value=S_OK(fields))
+    agent.collector_api_key = "test-api-key"
+    agent.collector_ca_path = "/test/igtf-cas"
+    agent.collector_base_url = "https://collector.example/job-reporting"
+    agent.dry_run = False
+    agent.log = Mock()
+    agent.am_createStopAgentFile = Mock()
+    agent._write_checkpoint = Mock(return_value=S_OK())
+    responses = [
+        Mock(status_code=422, text="Invalid payload"),
+        Mock(status_code=422, text="Still invalid"),
+    ]
+
+    with patch(
+        "GridPPDIRAC.WorkloadManagementSystem.Agent.GreenDigitAgent.requests.post",
+        side_effect=responses,
+    ) as post:
+        result = agent._report_completed_jobs(datetime(2026, 11, 6), datetime(2026, 11, 7))
+
+    assert not result["OK"]
+    assert result["StatusCode"] == 422
+    assert post.call_count == 2
+    agent.get_collector_job_fields.assert_called_once_with()
     agent.am_createStopAgentFile.assert_called_once_with()
+    agent._write_checkpoint.assert_not_called()
+
+
+def test_report_completed_jobs_stops_if_field_refresh_fails_after_422():
+    """Stop rather than repeatedly submit a rejected payload when refresh fails."""
+    agent = GreenDigitAgent.__new__(GreenDigitAgent)
+    agent.job_monitoring_client = Mock()
+    agent.job_monitoring_client.getJobs.return_value = S_OK([10])
+    agent.job_monitoring_client.getJobsSummary.return_value = S_OK(
+        {10: {"EndExecTime": datetime(2026, 11, 6, 14, 30)}}
+    )
+    agent.job_monitoring_client.getJobParameters.return_value = S_OK({10: {}})
+    agent.collector_job_fields = {
+        "job_parameter_keys": ["JobID"],
+        "job_attribute_keys": ["EndExecTime"],
+    }
+    agent.get_collector_job_fields = Mock(
+        return_value={"OK": False, "Message": "Collector fields endpoint unavailable"}
+    )
+    agent.collector_api_key = "test-api-key"
+    agent.collector_ca_path = "/test/igtf-cas"
+    agent.collector_base_url = "https://collector.example/job-reporting"
+    agent.dry_run = False
+    agent.log = Mock()
+    agent.am_createStopAgentFile = Mock()
+    agent._write_checkpoint = Mock(return_value=S_OK())
+
+    with patch(
+        "GridPPDIRAC.WorkloadManagementSystem.Agent.GreenDigitAgent.requests.post",
+        return_value=Mock(status_code=422, text="Unknown field"),
+    ) as post:
+        result = agent._report_completed_jobs(datetime(2026, 11, 6), datetime(2026, 11, 7))
+
+    assert not result["OK"]
+    assert result["Message"] == "Collector fields endpoint unavailable"
+    post.assert_called_once()
+    agent.get_collector_job_fields.assert_called_once_with()
+    agent.am_createStopAgentFile.assert_called_once_with()
+    agent._write_checkpoint.assert_not_called()
 
 
 def test_execute_refreshes_job_fields_every_configured_cycles():
