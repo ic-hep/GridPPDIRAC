@@ -6,6 +6,11 @@ submitting them or advancing the checkpoint.
 
 Note: The collector's accepted field lists are refreshed at runtime, but the
 source field maps are static. New collector fields require explicit mappings here.
+
+Submission recovery: HTTP 202 advances the checkpoint. HTTP 401 stops the agent.
+HTTP 422 refreshes collector fields, rebuilds the payload, and retries once; a
+failed refresh/rebuild or a second 422 stops the agent. HTTP 503 leaves the
+checkpoint unchanged so the job can be retried in the next cycle.
 """
 
 from datetime import datetime, timedelta, timezone
