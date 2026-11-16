@@ -16,6 +16,7 @@ checkpoint unchanged so the job can be retried in the next cycle.
 from datetime import datetime, timedelta, timezone
 import json
 import os
+from urllib.parse import urljoin
 
 import requests
 
@@ -58,16 +59,17 @@ ATTRIBUTE_FIELD_MAP = {
 	"EndExecTime": "EndExecTime",
 }
 
+TIMESTAMP_FIELDS = frozenset({"SubmissionTime", "StartExecTime", "EndExecTime"})
+
 
 class GreenDigitAgent(AgentModule):
 	"""Periodically report completed DIRAC jobs to the GreenDigit collector."""
 
 	def initialize(self):
 		"""Initialize agent state and configuration."""
-		self.am_setOption("PollingTime", 15 * 60)
 		self.collector_base_url = self.am_getOption(
 			"CollectorBaseURL", "https://dirac.egi.eu/job-reporting"
-		)
+		).rstrip("/")
 		self.collector_api_key = self.am_getOption("CollectorAPIKey", "")
 		self.dry_run = self.am_getOption("DryRun", False)
 		self.collector_ca_path = self.am_getOption(
@@ -75,6 +77,10 @@ class GreenDigitAgent(AgentModule):
 		)
 		if not self.collector_ca_path:
 			message = "IGTF CA bundle is not configured; configure DIRAC CA locations or CollectorCAPath"
+			self.log.error(message)
+			return S_ERROR(message)
+		if not self.dry_run and not self.collector_api_key:
+			message = "CollectorAPIKey is required unless DryRun is enabled"
 			self.log.error(message)
 			return S_ERROR(message)
 		self.collector_fields_refresh_cycles = int(
@@ -101,9 +107,13 @@ class GreenDigitAgent(AgentModule):
 			self.log.info("Live reporting: checkpoint advances only after HTTP 202 acceptance")
 		return S_OK()
 
+	def _collector_url(self, endpoint):
+		"""Join an API endpoint to the configured collector base URL."""
+		return urljoin("%s/" % self.collector_base_url, endpoint.lstrip("/"))
+
 	def get_collector_health(self):
 		"""Return the collector health response."""
-		url = "%s/health" % self.collector_base_url.rstrip("/")
+		url = self._collector_url("health")
 		try:
 			response = requests.get(
 				url,
@@ -130,7 +140,7 @@ class GreenDigitAgent(AgentModule):
 
 	def get_collector_job_fields(self):
 		"""Return the collector's accepted job parameter and attribute names."""
-		url = "%s/job-fields" % self.collector_base_url.rstrip("/")
+		url = self._collector_url("job-fields")
 		try:
 			response = requests.get(
 				url,
@@ -168,28 +178,14 @@ class GreenDigitAgent(AgentModule):
 
 		return S_OK(fields)
 
-	@staticmethod
-	def _json_value(value, timespec="auto"):
-		"""Convert DIRAC DB values to JSON-compatible values."""
-		if (
-			isinstance(value, str)
-			and len(value) >= 19
-			and value[4] == "-"
-			and value[7] == "-"
-			and value[10] in ("T", " ")
-		):
-			try:
-				value = datetime.fromisoformat(value.replace("Z", "+00:00"))
-			except ValueError:
-				pass
-		if isinstance(value, datetime):
-			if value.tzinfo is None:
-				value = value.replace(tzinfo=timezone.utc)
-			else:
-				value = value.astimezone(timezone.utc)
-			return value.isoformat(timespec=timespec).replace("+00:00", "Z")
+	@classmethod
+	def _json_value(cls, value, is_timestamp=False, timespec="auto"):
+		"""Convert DIRAC values to JSON-compatible values, formatting known timestamps."""
 		if isinstance(value, bytes):
-			return value.decode("utf-8")
+			value = value.decode("utf-8")
+		if is_timestamp:
+			value = cls._parse_timestamp(value)
+			return value.isoformat(timespec=timespec) + "Z"
 		return value
 
 	@classmethod
@@ -204,13 +200,30 @@ class GreenDigitAgent(AgentModule):
 		for collector_name, source_name in PARAMETER_FIELD_MAP.items():
 			value = parameters.get(source_name)
 			if collector_name in accepted_parameters and value is not None:
-				job_parameters[collector_name] = cls._json_value(value)
+				try:
+					job_parameters[collector_name] = cls._json_value(
+						value,
+						is_timestamp=collector_name in TIMESTAMP_FIELDS,
+					)
+				except (TypeError, ValueError) as error:
+					return S_ERROR(
+						"Invalid timestamp for job parameter %s: %s" % (collector_name, error)
+					)
 
 		job_attributes = {}
 		for collector_name, source_name in ATTRIBUTE_FIELD_MAP.items():
 			value = attributes.get(source_name)
 			if collector_name in accepted_attributes and value is not None:
-				job_attributes[collector_name] = cls._json_value(value, timespec="seconds")
+				try:
+					job_attributes[collector_name] = cls._json_value(
+						value,
+						is_timestamp=collector_name in TIMESTAMP_FIELDS,
+						timespec="seconds" if collector_name in TIMESTAMP_FIELDS else "auto",
+					)
+				except (TypeError, ValueError) as error:
+					return S_ERROR(
+						"Invalid timestamp for job attribute %s: %s" % (collector_name, error)
+					)
 
 		return S_OK({"job_parameters": job_parameters, "job_attributes": job_attributes})
 
@@ -247,10 +260,7 @@ class GreenDigitAgent(AgentModule):
 
 	def _post_job(self, payload):
 		"""Submit one job record to the collector."""
-		if not self.collector_api_key:
-			return S_ERROR("CollectorAPIKey is not configured")
-
-		url = "%s/jobs" % self.collector_base_url.rstrip("/")
+		url = self._collector_url("jobs")
 		try:
 			response = requests.post(
 				url,
@@ -300,8 +310,15 @@ class GreenDigitAgent(AgentModule):
 		jobs_to_report = []
 		for job_id in job_ids:
 			attributes = attributes_by_job.get(int(job_id), {})
+			end_exec_time_value = attributes.get("EndExecTime")
+			if end_exec_time_value is None:
+				self.log.warn(
+					"Skipping final job %s with no EndExecTime (status=%s)"
+					% (job_id, attributes.get("Status", "unknown"))
+				)
+				continue
 			try:
-				end_exec_time = self._parse_timestamp(attributes.get("EndExecTime"))
+				end_exec_time = self._parse_timestamp(end_exec_time_value)
 			except (TypeError, ValueError) as error:
 				return S_ERROR("Job %s has invalid EndExecTime: %s" % (job_id, error))
 			if since < end_exec_time <= until:
@@ -389,10 +406,6 @@ class GreenDigitAgent(AgentModule):
 
 	def execute(self):
 		"""Run one polling cycle."""
-		self.log.info(
-			"Starting GreenDigit cycle: DryRun=%s, API key configured=%s"
-			% (self.dry_run, bool(self.collector_api_key))
-		)
 		if (
 			self.collector_job_fields is None
 			or self.cycles_since_fields_refresh >= self.collector_fields_refresh_cycles
@@ -404,8 +417,6 @@ class GreenDigitAgent(AgentModule):
 			self.cycles_since_fields_refresh = 0
 
 		self.cycles_since_fields_refresh += 1
-		if not self.dry_run and not self.collector_api_key:
-			return S_ERROR("CollectorAPIKey is not configured")
 
 		now = datetime.now(timezone.utc).replace(tzinfo=None)
 		since = self._read_checkpoint(now)

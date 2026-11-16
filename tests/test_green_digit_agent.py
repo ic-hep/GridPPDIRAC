@@ -38,7 +38,9 @@ def test_initialize_uses_dirac_ca_location_by_default():
     """Use DIRAC's configured CA path when no collector-specific path is set."""
     agent = GreenDigitAgent.__new__(GreenDigitAgent)
     agent.am_setOption = Mock()
-    agent.am_getOption = Mock(side_effect=lambda _name, default=None: default)
+    agent.am_getOption = Mock(
+        side_effect=lambda name, default=None: "test-api-key" if name == "CollectorAPIKey" else default
+    )
     agent.am_getWorkDirectory = Mock(return_value="/tmp/green-digit")
     agent.log = Mock()
 
@@ -55,6 +57,50 @@ def test_initialize_uses_dirac_ca_location_by_default():
 
     assert result["OK"]
     assert agent.collector_ca_path == "/dirac/ca-bundle"
+
+
+def test_initialize_requires_api_key_for_live_mode():
+    """Reject live-mode configuration without an API key during startup."""
+    agent = GreenDigitAgent.__new__(GreenDigitAgent)
+    agent.am_setOption = Mock()
+    agent.am_getOption = Mock(side_effect=lambda _name, default=None: default)
+    agent.log = Mock()
+
+    with patch(
+        "GridPPDIRAC.WorkloadManagementSystem.Agent.GreenDigitAgent.Locations.getCAsLocation",
+        return_value="/dirac/ca-bundle",
+    ):
+        result = agent.initialize()
+
+    assert not result["OK"]
+    assert result["Message"] == "CollectorAPIKey is required unless DryRun is enabled"
+    agent.log.error.assert_called_once_with(result["Message"])
+
+
+def test_initialize_allows_missing_api_key_in_dry_run():
+    """Allow dry-run startup without collector credentials."""
+    agent = GreenDigitAgent.__new__(GreenDigitAgent)
+    agent.am_setOption = Mock()
+    agent.am_getOption = Mock(
+        side_effect=lambda name, default=None: True if name == "DryRun" else default
+    )
+    agent.am_getWorkDirectory = Mock(return_value="/tmp/green-digit")
+    agent.log = Mock()
+
+    with (
+        patch(
+            "GridPPDIRAC.WorkloadManagementSystem.Agent.GreenDigitAgent.Locations.getCAsLocation",
+            return_value="/dirac/ca-bundle",
+        ),
+        patch(
+            "GridPPDIRAC.WorkloadManagementSystem.Agent.GreenDigitAgent.JobMonitoringClient"
+        ),
+    ):
+        result = agent.initialize()
+
+    assert result["OK"]
+    assert agent.dry_run
+    assert not agent.collector_api_key
 
 
 def test_initialize_fails_when_no_ca_location_is_configured():
@@ -363,9 +409,24 @@ def test_json_value_normalizes_timestamp_strings_and_preserves_microseconds():
     """Treat naive timestamps as UTC and retain sub-second precision."""
     naive_timestamp = datetime(2026, 11, 6, 14, 30, 0, 123456)
     timestamp_string = "2026-11-06T14:30:00.123456"
+    offset_timestamp = datetime.fromisoformat("2026-11-06T16:30:00.123456+02:00")
 
-    assert GreenDigitAgent._json_value(naive_timestamp) == "2026-11-06T14:30:00.123456Z"
-    assert GreenDigitAgent._json_value(timestamp_string) == "2026-11-06T14:30:00.123456Z"
+    assert GreenDigitAgent._json_value(naive_timestamp, is_timestamp=True) == "2026-11-06T14:30:00.123456Z"
+    assert GreenDigitAgent._json_value(timestamp_string, is_timestamp=True) == "2026-11-06T14:30:00.123456Z"
+    assert GreenDigitAgent._json_value(offset_timestamp, is_timestamp=True) == "2026-11-06T14:30:00.123456Z"
+
+
+def test_build_payload_reports_invalid_value_for_timestamp_field():
+    """Reject malformed values for known timestamp fields with field context."""
+    result = GreenDigitAgent.build_payload(
+        123,
+        {"EndExecTime": "not-a-date"},
+        {},
+        {"job_parameter_keys": ["JobID"], "job_attribute_keys": ["EndExecTime"]},
+    )
+
+    assert not result["OK"]
+    assert "Invalid timestamp for job attribute EndExecTime" in result["Message"]
 
 
 def test_report_completed_jobs_queries_and_checkpoints_after_each_post():
@@ -405,6 +466,38 @@ def test_report_completed_jobs_queries_and_checkpoints_after_each_post():
         call(datetime(2026, 11, 6, 14, 30)),
         call(datetime(2026, 11, 6, 14, 31)),
     ]
+
+
+def test_report_completed_jobs_skips_missing_end_exec_time_and_continues():
+    """Skip final jobs without an execution end time without blocking others."""
+    agent = GreenDigitAgent.__new__(GreenDigitAgent)
+    agent.job_monitoring_client = Mock()
+    agent.job_monitoring_client.getJobs.return_value = S_OK([10, 11])
+    agent.job_monitoring_client.getJobsSummary.return_value = S_OK(
+        {
+            10: {"Status": "Killed", "EndExecTime": None},
+            11: {"Status": "Done", "EndExecTime": datetime(2026, 11, 6, 14, 31)},
+        }
+    )
+    agent.job_monitoring_client.getJobParameters.return_value = S_OK({11: {}})
+    agent.collector_job_fields = {
+        "job_parameter_keys": ["JobID"],
+        "job_attribute_keys": ["EndExecTime"],
+    }
+    agent.dry_run = False
+    agent.log = Mock()
+    agent._post_job = Mock(return_value=S_OK("accepted"))
+    agent._write_checkpoint = Mock(return_value=S_OK())
+
+    result = agent._report_completed_jobs(datetime(2026, 11, 6), datetime(2026, 11, 7))
+
+    assert result["OK"]
+    agent.log.warn.assert_called_once_with(
+        "Skipping final job 10 with no EndExecTime (status=Killed)"
+    )
+    agent.job_monitoring_client.getJobParameters.assert_called_once_with([11])
+    agent._post_job.assert_called_once()
+    agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 31))
 
 
 def test_report_completed_jobs_stops_without_checkpoint_after_failed_post():
