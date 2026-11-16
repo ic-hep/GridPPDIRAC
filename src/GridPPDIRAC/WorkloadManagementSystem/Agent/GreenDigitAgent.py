@@ -1,4 +1,12 @@
-"""GreenDigit agent template."""
+"""Report completed DIRAC jobs to the GreenDigit collector.
+
+Jobs and their data are read through JobMonitoringClient, filtered by EndExecTime,
+and mapped to the collector's accepted fields. Dry-run mode logs payloads without
+submitting them or advancing the checkpoint.
+
+Note: The collector's accepted field lists are refreshed at runtime, but the
+source field maps are static. New collector fields require explicit mappings here.
+"""
 
 from datetime import datetime, timedelta, timezone
 import json
@@ -47,7 +55,7 @@ ATTRIBUTE_FIELD_MAP = {
 
 
 class GreenDigitAgent(AgentModule):
-	"""Standard DIRAC agent scaffold for GreenDigit tasks."""
+	"""Periodically report completed DIRAC jobs to the GreenDigit collector."""
 
 	def initialize(self):
 		"""Initialize agent state and configuration."""
