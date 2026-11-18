@@ -4,13 +4,13 @@ Jobs and their data are read through JobMonitoringClient, filtered by EndExecTim
 and mapped to the collector's accepted fields. Dry-run mode logs payloads without
 submitting them or advancing the checkpoint.
 
-Note: The collector's accepted field lists are refreshed at runtime, but the
-source field maps are static. New collector fields require explicit mappings here.
+Note: Payload fields are determined solely by the static source maps. New or
+renamed collector fields require updating those maps and redeploying the agent.
 
-Submission recovery: HTTP 202 advances the checkpoint. HTTP 401 stops the agent.
-HTTP 422 refreshes collector fields, rebuilds the payload, and retries once; a
-failed refresh/rebuild or a second 422 stops the agent. HTTP 503 leaves the
-checkpoint unchanged so the job can be retried in the next cycle.
+Submission recovery: HTTP 202 advances the timestamp checkpoint. HTTP 401 and 503
+end the current batch. HTTP 422 stops the agent because the static payload was
+rejected. Same-timestamp siblings may be excluded after an earlier sibling advances
+the timestamp checkpoint.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -29,35 +29,34 @@ from DIRAC.WorkloadManagementSystem.Client import JobStatus
 
 __RCSID__ = "$Id$"
 
-# Collector field name -> JobParametersDB key.
-PARAMETER_FIELD_MAP = {
-	"ModelName": "ModelName",
-	"CPUNormalizationFactor": "CPUNormalizationFactor",
-	"HostName": "HostName",
-	"JobType": "JobType",
-	"LoadAverage": "LoadAverage",
-	"MemoryUsed(kb)": "MemoryUsed(kb)",
-	"NormCPUTime(s)": "NormCPUTime(s)",
-	"ScaledCPUTime(s)": "ScaledCPUTime(s)",
-	"TotalCPUTime(s)": "TotalCPUTime(s)",
-	"WallClockTime(s)": "WallClockTime(s)",
-	"DiskSpace(MB)": "DiskSpace(MB)",
-	"CEQueue": "CEQueue",
-	"GridCE": "GridCE",
-}
+# Field names match their DIRAC source names in JobParametersDB and JobDB.
+PARAMETER_FIELDS = (
+	"ModelName",
+	"CPUNormalizationFactor",
+	"HostName",
+	"JobType",
+	"LoadAverage",
+	"MemoryUsed(kb)",
+	"NormCPUTime(s)",
+	"ScaledCPUTime(s)",
+	"TotalCPUTime(s)",
+	"WallClockTime(s)",
+	"DiskSpace(MB)",
+	"CEQueue",
+	"GridCE",
+)
 
-# Collector field name -> JobDB Jobs attribute.
-ATTRIBUTE_FIELD_MAP = {
-	"JobGroup": "JobGroup",
-	"JobName": "JobName",
-	"OwnerGroup": "OwnerGroup",
-	"RescheduleCounter": "RescheduleCounter",
-	"Site": "Site",
-	"Status": "Status",
-	"SubmissionTime": "SubmissionTime",
-	"StartExecTime": "StartExecTime",
-	"EndExecTime": "EndExecTime",
-}
+ATTRIBUTE_FIELDS = (
+	"JobGroup",
+	"JobName",
+	"OwnerGroup",
+	"RescheduleCounter",
+	"Site",
+	"Status",
+	"SubmissionTime",
+	"StartExecTime",
+	"EndExecTime",
+)
 
 TIMESTAMP_FIELDS = frozenset({"SubmissionTime", "StartExecTime", "EndExecTime"})
 
@@ -83,20 +82,12 @@ class GreenDigitAgent(AgentModule):
 			message = "CollectorAPIKey is required unless DryRun is enabled"
 			self.log.error(message)
 			return S_ERROR(message)
-		self.collector_fields_refresh_cycles = int(
-			self.am_getOption("CollectorFieldsRefreshCycles", 2)
-		)
-		if self.collector_fields_refresh_cycles < 1:
-			return S_ERROR("CollectorFieldsRefreshCycles must be at least 1")
-		self.collector_job_fields = None
-		self.cycles_since_fields_refresh = 0
 		self.timestamp_file = os.path.join(self.am_getWorkDirectory(), "green_digit_last_end_time")
 		self.job_monitoring_client = JobMonitoringClient()
 		self.log.info("============================================================================")
 		self.log.info("GreenDigitAgent initialized: completed-job reporting via JobMonitoringClient")
 		self.log.info("CollectorBaseURL: %s" % self.collector_base_url)
 		self.log.info("PollingTime: %s seconds" % self.am_getOption("PollingTime"))
-		self.log.info("CollectorFieldsRefreshCycles: %s" % self.collector_fields_refresh_cycles)
 		self.log.info("DryRun: %s" % self.dry_run)
 		self.log.info("CollectorCAPath: %s" % (self.collector_ca_path or "not configured"))
 		self.log.info("CollectorAPIKey: %s" % ("configured" if self.collector_api_key else "not configured"))
@@ -138,46 +129,6 @@ class GreenDigitAgent(AgentModule):
 			health = response.text
 		return S_OK(health)
 
-	def get_collector_job_fields(self):
-		"""Return the collector's accepted job parameter and attribute names."""
-		url = self._collector_url("job-fields")
-		try:
-			response = requests.get(
-				url,
-				timeout=10,
-				verify=self.collector_ca_path,
-				allow_redirects=False,
-			)
-		except requests.RequestException as error:
-			self.log.exception("Failed to get GreenDigit collector job fields")
-			return S_ERROR(str(error))
-
-		if not 200 <= response.status_code < 300:
-			message = "Collector job-fields request failed with HTTP %s: %s" % (
-				response.status_code, response.text
-			)
-			self.log.error(message)
-			return S_ERROR(message)
-
-		try:
-			fields = response.json()
-		except ValueError as error:
-			message = "Collector job-fields response is not valid JSON: %s" % error
-			self.log.error(message)
-			return S_ERROR(message)
-
-		required_lists = ("job_parameter_keys", "job_attribute_keys")
-		if not isinstance(fields, dict) or any(
-			not isinstance(fields.get(key), list)
-			or any(not isinstance(name, str) for name in fields[key])
-			for key in required_lists
-		):
-			message = "Collector job-fields response has an invalid structure"
-			self.log.error(message)
-			return S_ERROR(message)
-
-		return S_OK(fields)
-
 	@classmethod
 	def _json_value(cls, value, is_timestamp=False, timespec="auto"):
 		"""Convert DIRAC values to JSON-compatible values, formatting known timestamps."""
@@ -189,40 +140,35 @@ class GreenDigitAgent(AgentModule):
 		return value
 
 	@classmethod
-	def build_payload(cls, job_id, attributes, parameters, collector_fields):
-		"""Build a collector payload using explicit DIRAC-to-collector field maps."""
-		accepted_parameters = set(collector_fields["job_parameter_keys"])
-		accepted_attributes = set(collector_fields["job_attribute_keys"])
-		if "JobID" not in accepted_parameters:
-			return S_ERROR("Collector job-fields does not accept required job_parameters.JobID")
-
+	def build_payload(cls, job_id, attributes, parameters):
+		"""Build a collector payload from the static field lists."""
 		job_parameters = {"JobID": int(job_id)}
-		for collector_name, source_name in PARAMETER_FIELD_MAP.items():
-			value = parameters.get(source_name)
-			if collector_name in accepted_parameters and value is not None:
+		for field_name in PARAMETER_FIELDS:
+			value = parameters.get(field_name)
+			if value is not None:
 				try:
-					job_parameters[collector_name] = cls._json_value(
+					job_parameters[field_name] = cls._json_value(
 						value,
-						is_timestamp=collector_name in TIMESTAMP_FIELDS,
+						is_timestamp=field_name in TIMESTAMP_FIELDS,
 					)
 				except (TypeError, ValueError) as error:
 					return S_ERROR(
-						"Invalid timestamp for job parameter %s: %s" % (collector_name, error)
+						"Invalid timestamp for job parameter %s: %s" % (field_name, error)
 					)
 
 		job_attributes = {}
-		for collector_name, source_name in ATTRIBUTE_FIELD_MAP.items():
-			value = attributes.get(source_name)
-			if collector_name in accepted_attributes and value is not None:
+		for field_name in ATTRIBUTE_FIELDS:
+			value = attributes.get(field_name)
+			if value is not None:
 				try:
-					job_attributes[collector_name] = cls._json_value(
+					job_attributes[field_name] = cls._json_value(
 						value,
-						is_timestamp=collector_name in TIMESTAMP_FIELDS,
-						timespec="seconds" if collector_name in TIMESTAMP_FIELDS else "auto",
+						is_timestamp=field_name in TIMESTAMP_FIELDS,
+						timespec="seconds" if field_name in TIMESTAMP_FIELDS else "auto",
 					)
 				except (TypeError, ValueError) as error:
 					return S_ERROR(
-						"Invalid timestamp for job attribute %s: %s" % (collector_name, error)
+						"Invalid timestamp for job attribute %s: %s" % (field_name, error)
 					)
 
 		return S_OK({"job_parameters": job_parameters, "job_attributes": job_attributes})
@@ -282,8 +228,7 @@ class GreenDigitAgent(AgentModule):
 			result = S_ERROR(message)
 			result["StatusCode"] = response.status_code
 			if response.status_code == 401:
-				self.log.error("Stopping GreenDigitAgent because collector authentication failed")
-				self.am_createStopAgentFile()
+				self.log.error("Collector authentication failed; batch will retry next cycle")
 			elif response.status_code == 503:
 				self.log.error("Collector returned HTTP 503; job will be retried next cycle")
 			return result
@@ -313,14 +258,17 @@ class GreenDigitAgent(AgentModule):
 			end_exec_time_value = attributes.get("EndExecTime")
 			if end_exec_time_value is None:
 				self.log.warn(
-					"Skipping final job %s with no EndExecTime (status=%s)"
+					"Skipping final state job %s with no EndExecTime (status=%s)"
 					% (job_id, attributes.get("Status", "unknown"))
 				)
 				continue
 			try:
 				end_exec_time = self._parse_timestamp(end_exec_time_value)
 			except (TypeError, ValueError) as error:
-				return S_ERROR("Job %s has invalid EndExecTime: %s" % (job_id, error))
+				self.log.warn(
+					"Skipping final state job %s with invalid EndExecTime: %s" % (job_id, error)
+				)
+				continue
 			if since < end_exec_time <= until:
 				jobs_to_report.append((end_exec_time, int(job_id), attributes))
 		jobs_to_report.sort(key=lambda job: (job[0], job[1]))
@@ -336,12 +284,7 @@ class GreenDigitAgent(AgentModule):
 
 		for end_exec_time, job_id, attributes in jobs_to_report:
 			parameters = parameters_by_job.get(int(job_id), {})
-			payload_result = self.build_payload(
-				job_id,
-				attributes,
-				parameters,
-				self.collector_job_fields,
-			)
+			payload_result = self.build_payload(job_id, attributes, parameters)
 			if not payload_result["OK"]:
 				return payload_result
 			self.log.verbose(
@@ -353,40 +296,10 @@ class GreenDigitAgent(AgentModule):
 
 			submission_result = self._post_job(payload_result["Value"])
 			if not submission_result["OK"] and submission_result.get("StatusCode") == 422:
-				self.log.notice(
-					"Collector rejected job %s with HTTP 422; refreshing fields and retrying once"
-					% job_id
-				)
-				fields_result = self.get_collector_job_fields()
-				if not fields_result["OK"]:
-					self.log.error(
-						"Stopping GreenDigitAgent: cannot refresh collector fields after HTTP 422"
-					)
-					self.am_createStopAgentFile()
-					return fields_result
-				self.collector_job_fields = fields_result["Value"]
-
-				payload_result = self.build_payload(
-					job_id,
-					attributes,
-					parameters,
-					self.collector_job_fields,
-				)
-				if not payload_result["OK"]:
-					self.log.error("Stopping GreenDigitAgent because the refreshed payload is invalid")
-					self.am_createStopAgentFile()
-					return payload_result
-
-				self.log.verbose(
-					"Refreshed payload for job %s:\n%s"
-					% (job_id, json.dumps(payload_result["Value"], indent=2, sort_keys=True))
-				)
-				submission_result = self._post_job(payload_result["Value"])
-				if not submission_result["OK"] and submission_result.get("StatusCode") == 422:
-					self.log.error(
-						"Stopping GreenDigitAgent because collector rejected the refreshed payload"
-					)
-					self.am_createStopAgentFile()
+				self.log.error("Stopping GreenDigitAgent because collector rejected the payload"
+                " (client-side bug)")
+				self.am_createStopAgentFile()
+			# 401 and 503 end this batch; only the last accepted timestamp is checkpointed.
 			if not submission_result["OK"]:
 				return submission_result
 
@@ -406,18 +319,6 @@ class GreenDigitAgent(AgentModule):
 
 	def execute(self):
 		"""Run one polling cycle."""
-		if (
-			self.collector_job_fields is None
-			or self.cycles_since_fields_refresh >= self.collector_fields_refresh_cycles
-		):
-			result = self.get_collector_job_fields()
-			if not result["OK"]:
-				return result
-			self.collector_job_fields = result["Value"]
-			self.cycles_since_fields_refresh = 0
-
-		self.cycles_since_fields_refresh += 1
-
 		now = datetime.now(timezone.utc).replace(tzinfo=None)
 		since = self._read_checkpoint(now)
 		if isinstance(since, dict) and not since["OK"]:
