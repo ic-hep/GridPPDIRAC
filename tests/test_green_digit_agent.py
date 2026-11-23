@@ -1,6 +1,6 @@
 """Unit tests for GreenDigitAgent helpers."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import Mock, call, patch
 
 from DIRAC import S_OK
@@ -269,22 +269,22 @@ def test_report_completed_jobs_queries_and_checkpoints_each_accepted_job():
     agent.build_payload = Mock(side_effect=lambda job_id, *_: S_OK({"job_id": job_id}))
     agent._post_job = Mock(side_effect=[S_OK("accepted"), S_OK("accepted")])
     agent._write_checkpoint = Mock(return_value=S_OK())
-    since = datetime(2026, 11, 6, 14, 0)
+    checkpoint = (datetime(2026, 11, 6, 14, 0), 0)
     until = datetime(2026, 11, 6, 15, 0)
 
-    result = agent._report_completed_jobs(since, until)
+    result = agent._report_completed_jobs(checkpoint, until)
 
     assert result["OK"]
     agent.job_monitoring_client.getJobs.assert_called_once_with(
         {"Status": JobStatus.JOB_FINAL_STATES},
-        cutDate=since,
+        cutDate=checkpoint[0],
     )
     agent.job_monitoring_client.getJobsSummary.assert_called_once_with([11, 10])
     assert agent._post_job.call_args_list == [call({"job_id": 10}), call({"job_id": 11})]
     agent.job_monitoring_client.getJobParameters.assert_called_once_with([10, 11])
     assert agent._write_checkpoint.call_args_list == [
-        call(datetime(2026, 11, 6, 14, 30)),
-        call(datetime(2026, 11, 6, 14, 31)),
+        call(datetime(2026, 11, 6, 14, 30), 10),
+        call(datetime(2026, 11, 6, 14, 31), 11),
     ]
 
 
@@ -308,7 +308,7 @@ def test_report_completed_jobs_includes_early_end_time_after_later_update():
     agent._write_checkpoint = Mock(return_value=S_OK())
 
     result = agent._report_completed_jobs(
-        datetime(2026, 11, 6, 14, 35),
+        (datetime(2026, 11, 6, 14, 35), 0),
         datetime(2026, 11, 6, 15, 0),
     )
 
@@ -316,7 +316,7 @@ def test_report_completed_jobs_includes_early_end_time_after_later_update():
     agent._post_job.assert_called_once()
     posted_payload = agent._post_job.call_args.args[0]
     assert posted_payload["job_attributes"]["EndExecTime"] == "2026-11-06T14:30:00Z"
-    agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 40))
+    agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 40), 10)
 
 
 def test_report_completed_jobs_skips_invalid_last_update_time_and_continues():
@@ -340,14 +340,14 @@ def test_report_completed_jobs_skips_invalid_last_update_time_and_continues():
     agent._post_job = Mock(return_value=S_OK("accepted"))
     agent._write_checkpoint = Mock(return_value=S_OK())
 
-    result = agent._report_completed_jobs(datetime(2026, 11, 6), datetime(2026, 11, 7))
+    result = agent._report_completed_jobs((datetime(2026, 11, 6), 0), datetime(2026, 11, 7))
 
     assert result["OK"]
     warning = agent.log.warn.call_args.args[0]
     assert warning.startswith("Skipping final state job 10 with invalid LastUpdateTime:")
     agent.job_monitoring_client.getJobParameters.assert_called_once_with([11])
     agent._post_job.assert_called_once()
-    agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 31))
+    agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 31), 11)
 
 
 def test_report_completed_jobs_skips_missing_end_exec_time_and_continues():
@@ -375,7 +375,7 @@ def test_report_completed_jobs_skips_missing_end_exec_time_and_continues():
     agent._post_job = Mock(return_value=S_OK("accepted"))
     agent._write_checkpoint = Mock(return_value=S_OK())
 
-    result = agent._report_completed_jobs(datetime(2026, 11, 6), datetime(2026, 11, 7))
+    result = agent._report_completed_jobs((datetime(2026, 11, 6), 0), datetime(2026, 11, 7))
 
     assert result["OK"]
     agent.log.warn.assert_called_once_with(
@@ -383,7 +383,7 @@ def test_report_completed_jobs_skips_missing_end_exec_time_and_continues():
     )
     agent.job_monitoring_client.getJobParameters.assert_called_once_with([11])
     agent._post_job.assert_called_once()
-    agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 31))
+    agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 31), 11)
 
 
 def test_report_completed_jobs_stops_without_checkpoint_after_failed_post():
@@ -412,11 +412,11 @@ def test_report_completed_jobs_stops_without_checkpoint_after_failed_post():
     agent._post_job = Mock(side_effect=[S_OK("accepted"), {"OK": False, "Message": "HTTP 503"}])
     agent._write_checkpoint = Mock(return_value=S_OK())
 
-    result = agent._report_completed_jobs(datetime(2026, 11, 6), datetime(2026, 11, 7))
+    result = agent._report_completed_jobs((datetime(2026, 11, 6), 0), datetime(2026, 11, 7))
 
     assert not result["OK"]
     assert agent._post_job.call_count == 2
-    agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 30))
+    agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 30), 10)
 
 
 def test_report_completed_jobs_retries_after_collector_503():
@@ -441,27 +441,27 @@ def test_report_completed_jobs_retries_after_collector_503():
     agent.am_createStopAgentFile = Mock()
     agent._write_checkpoint = Mock(return_value=S_OK())
     responses = [Mock(status_code=503, text="Temporarily unavailable"), Mock(status_code=202, text="accepted")]
-    since = datetime(2026, 11, 6, 14, 0)
+    checkpoint = (datetime(2026, 11, 6, 14, 0), 0)
     until = datetime(2026, 11, 6, 15, 0)
 
     with patch(
         "GridPPDIRAC.WorkloadManagementSystem.Agent.GreenDigitAgent.requests.post",
         side_effect=responses,
     ) as post:
-        first_result = agent._report_completed_jobs(since, until)
+        first_result = agent._report_completed_jobs(checkpoint, until)
         agent._write_checkpoint.assert_not_called()
 
-        retry_result = agent._report_completed_jobs(since, until)
+        retry_result = agent._report_completed_jobs(checkpoint, until)
 
     assert not first_result["OK"]
     assert retry_result["OK"]
     assert post.call_count == 2
     agent.am_createStopAgentFile.assert_not_called()
-    agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 30))
+    agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 30), 10)
 
 
-def test_report_completed_jobs_skips_same_timestamp_siblings_after_401():
-    """Advance on accepted job; timestamp filtering then omits both siblings."""
+def test_report_completed_jobs_resumes_at_failed_sibling_after_401():
+    """Retry only the failed job when two jobs share a LastUpdateTime."""
     agent = GreenDigitAgent.__new__(GreenDigitAgent)
     agent.job_monitoring_client = Mock()
     agent.job_monitoring_client.getJobs.return_value = S_OK([10, 11])
@@ -488,42 +488,47 @@ def test_report_completed_jobs_skips_same_timestamp_siblings_after_401():
     responses = [
         Mock(status_code=202, text="accepted"),
         Mock(status_code=401, text="Unauthorized"),
+        Mock(status_code=202, text="accepted"),
     ]
-    since = datetime(2026, 11, 6, 14, 0)
     until = datetime(2026, 11, 6, 15, 0)
 
     with patch(
         "GridPPDIRAC.WorkloadManagementSystem.Agent.GreenDigitAgent.requests.post",
         side_effect=responses,
     ) as post:
-        first_result = agent._report_completed_jobs(since, until)
-        assert post.call_count == 2
-        agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 30))
+        first_result = agent._report_completed_jobs((datetime(2026, 11, 6, 14, 0), 0), until)
+        agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 30), 10)
 
-        retry_result = agent._report_completed_jobs(datetime(2026, 11, 6, 14, 30), until)
+        retry_result = agent._report_completed_jobs((datetime(2026, 11, 6, 14, 30), 10), until)
 
     assert not first_result["OK"]
     assert first_result["StatusCode"] == 401
     assert retry_result["OK"]
-    assert post.call_count == 2
+    # Job 10 is sent once; job 11 failed, then is retried alone.
+    posted_ids = [c.kwargs["json"]["job_parameters"]["JobID"] for c in post.call_args_list]
+    assert posted_ids == [10, 11, 11]
     agent.am_createStopAgentFile.assert_not_called()
-    agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 30))
+    assert agent._write_checkpoint.call_args_list == [
+        call(datetime(2026, 11, 6, 14, 30), 10),
+        call(datetime(2026, 11, 6, 14, 30), 11),
+    ]
 
 
-def test_report_completed_jobs_stops_on_422_without_refresh_or_retry():
-    """Stop after a rejected static payload rather than refreshing/retrying."""
+def _agent_with_jobs(job_ids):
+    """Build an agent whose monitoring returns the given final jobs."""
     agent = GreenDigitAgent.__new__(GreenDigitAgent)
     agent.job_monitoring_client = Mock()
-    agent.job_monitoring_client.getJobs.return_value = S_OK([10])
+    agent.job_monitoring_client.getJobs.return_value = S_OK(job_ids)
     agent.job_monitoring_client.getJobsSummary.return_value = S_OK(
         {
-            10: {
+            job_id: {
                 "EndExecTime": datetime(2026, 11, 6, 14, 29),
-                "LastUpdateTime": datetime(2026, 11, 6, 14, 30),
+                "LastUpdateTime": datetime(2026, 11, 6, 14, 30 + index),
             }
+            for index, job_id in enumerate(job_ids)
         }
     )
-    agent.job_monitoring_client.getJobParameters.return_value = S_OK({10: {}})
+    agent.job_monitoring_client.getJobParameters.return_value = S_OK({job_id: {} for job_id in job_ids})
     agent.collector_api_key = "test-api-key"
     agent.collector_ca_path = "/test/igtf-cas"
     agent.collector_base_url = "https://collector.example/job-reporting"
@@ -531,18 +536,48 @@ def test_report_completed_jobs_stops_on_422_without_refresh_or_retry():
     agent.log = Mock()
     agent.am_createStopAgentFile = Mock()
     agent._write_checkpoint = Mock(return_value=S_OK())
+    return agent
+
+
+def test_report_completed_jobs_skips_an_isolated_422_and_continues():
+    """Skip one rejected job, checkpoint past it and keep reporting."""
+    agent = _agent_with_jobs([10, 11, 12])
+    responses = [
+        Mock(status_code=202, text="accepted"),
+        Mock(status_code=422, text="Invalid payload"),
+        Mock(status_code=202, text="accepted"),
+    ]
+
+    with patch(
+        "GridPPDIRAC.WorkloadManagementSystem.Agent.GreenDigitAgent.requests.post",
+        side_effect=responses,
+    ) as post:
+        result = agent._report_completed_jobs((datetime(2026, 11, 6), 0), datetime(2026, 11, 7))
+
+    assert result["OK"]
+    assert post.call_count == 3
+    agent.am_createStopAgentFile.assert_not_called()
+    assert agent._write_checkpoint.call_count == 3
+    assert "Skipping job 11" in agent.log.error.call_args.args[0]
+    assert agent.rejected_in_a_row == 0
+
+
+def test_report_completed_jobs_stops_on_two_422_in_a_row():
+    """Stop the agent when a second job is rejected before any is accepted."""
+    agent = _agent_with_jobs([10, 11, 12])
 
     with patch(
         "GridPPDIRAC.WorkloadManagementSystem.Agent.GreenDigitAgent.requests.post",
         return_value=Mock(status_code=422, text="Invalid payload"),
     ) as post:
-        result = agent._report_completed_jobs(datetime(2026, 11, 6), datetime(2026, 11, 7))
+        result = agent._report_completed_jobs((datetime(2026, 11, 6), 0), datetime(2026, 11, 7))
 
     assert not result["OK"]
     assert result["StatusCode"] == 422
-    post.assert_called_once()
+    assert post.call_count == 2
     agent.am_createStopAgentFile.assert_called_once_with()
-    agent._write_checkpoint.assert_not_called()
+    # Job 10 was skipped (checkpointed); job 11 will be retried after the fix.
+    agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 30), 10)
 
 
 def test_report_completed_jobs_dry_run_logs_payload_without_post_or_checkpoint():
@@ -564,7 +599,7 @@ def test_report_completed_jobs_dry_run_logs_payload_without_post_or_checkpoint()
     agent._post_job = Mock()
     agent._write_checkpoint = Mock()
 
-    result = agent._report_completed_jobs(datetime(2026, 11, 6), datetime(2026, 11, 7))
+    result = agent._report_completed_jobs((datetime(2026, 11, 6), 0), datetime(2026, 11, 7))
 
     assert result["OK"]
     agent.log.verbose.assert_called_once()
@@ -602,9 +637,84 @@ def test_report_completed_jobs_live_mode_logs_payload_before_post():
     agent._post_job = Mock(return_value=S_OK("accepted"))
     agent._write_checkpoint = Mock(return_value=S_OK())
 
-    result = agent._report_completed_jobs(datetime(2026, 11, 6), datetime(2026, 11, 7))
+    result = agent._report_completed_jobs((datetime(2026, 11, 6), 0), datetime(2026, 11, 7))
 
     assert result["OK"]
     agent.log.verbose.assert_called_once()
     assert '"HostName": "worker"' in agent.log.verbose.call_args.args[0]
     agent._post_job.assert_called_once()
+
+
+def _final_job_attributes(last_update_time):
+    return {
+        "EndExecTime": last_update_time - timedelta(minutes=1),
+        "LastUpdateTime": last_update_time,
+    }
+
+
+def test_report_completed_jobs_skips_jobs_at_or_before_the_checkpoint_pair():
+    """Resend nothing at or before (T, 200); only later JobIDs in that second pass."""
+    second = datetime(2026, 11, 23, 10, 0, 5)
+    agent = GreenDigitAgent.__new__(GreenDigitAgent)
+    agent.job_monitoring_client = Mock()
+    agent.job_monitoring_client.getJobs.return_value = S_OK([100, 150, 200, 300])
+    agent.job_monitoring_client.getJobsSummary.return_value = S_OK(
+        {job_id: _final_job_attributes(second) for job_id in (100, 150, 200, 300)}
+    )
+    agent.job_monitoring_client.getJobParameters.return_value = S_OK({300: {}})
+    agent.dry_run = False
+    agent.log = Mock()
+    agent._post_job = Mock(return_value=S_OK("accepted"))
+    agent._write_checkpoint = Mock(return_value=S_OK())
+
+    result = agent._report_completed_jobs((second, 200), datetime(2026, 11, 23, 10, 0, 6))
+
+    assert result["OK"]
+    posted_ids = [c.args[0]["job_parameters"]["JobID"] for c in agent._post_job.call_args_list]
+    assert posted_ids == [300]
+    agent._write_checkpoint.assert_called_once_with(second, 300)
+
+
+def test_execute_waits_for_the_second_to_close_before_reporting_it(tmp_path):
+    """A job that lands in the checkpoint second late (150) is still reported."""
+    second = datetime(2026, 11, 23, 10, 0, 5)
+    agent = GreenDigitAgent.__new__(GreenDigitAgent)
+    agent.timestamp_file = str(tmp_path / "checkpoint")
+    agent.dry_run = False
+    agent.log = Mock()
+    agent.job_monitoring_client = Mock()
+    agent.job_monitoring_client.getJobs.side_effect = [S_OK([100, 200]), S_OK([100, 150, 200])]
+    agent.job_monitoring_client.getJobsSummary.side_effect = [
+        S_OK({job_id: _final_job_attributes(second) for job_id in (100, 200)}),
+        S_OK({job_id: _final_job_attributes(second) for job_id in (100, 150, 200)}),
+    ]
+    agent.job_monitoring_client.getJobParameters.return_value = S_OK({100: {}, 150: {}, 200: {}})
+    agent._post_job = Mock(return_value=S_OK("accepted"))
+    # The first cycle runs while second 10:00:05 is still open; the next one after it closed.
+    agent._utcnow = Mock(
+        side_effect=[datetime(2026, 11, 23, 10, 0, 5, 500000), datetime(2026, 11, 23, 10, 0, 7, 200000)]
+    )
+
+    assert agent.execute()["OK"]
+    agent._post_job.assert_not_called()
+    assert not (tmp_path / "checkpoint").exists()
+
+    assert agent.execute()["OK"]
+    posted_ids = [c.args[0]["job_parameters"]["JobID"] for c in agent._post_job.call_args_list]
+    assert posted_ids == [100, 150, 200]
+    assert (tmp_path / "checkpoint").read_text() == "2026-11-23T10:00:05Z 200\n"
+
+
+def test_checkpoint_round_trip_and_whole_second_default(tmp_path):
+    """Default to a whole second 15 minutes back; reject the old timestamp-only file."""
+    agent = GreenDigitAgent.__new__(GreenDigitAgent)
+    agent.timestamp_file = str(tmp_path / "checkpoint")
+    now = datetime(2026, 11, 23, 10, 0, 5, 500000)
+
+    assert agent._read_checkpoint(now) == (datetime(2026, 11, 23, 9, 45, 5), 0)
+
+    assert agent._write_checkpoint(datetime(2026, 11, 23, 10, 0, 5), 200)["OK"]
+    assert agent._read_checkpoint(now) == (datetime(2026, 11, 23, 10, 0, 5), 200)
+
+    (tmp_path / "checkpoint").write_text("2026-11-23T10:00:05Z\n")
+    assert not agent._read_checkpoint(now)["OK"]

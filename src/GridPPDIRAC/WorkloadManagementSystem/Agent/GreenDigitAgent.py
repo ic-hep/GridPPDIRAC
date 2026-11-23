@@ -2,17 +2,23 @@
 
 Jobs and their data are read through JobMonitoringClient and mapped to the
 collector's accepted fields. Jobs are selected, ordered and checkpointed by
-LastUpdateTime, so a job whose EndExecTime is older than the checkpoint is still
-reported. EndExecTime is only reported; final-state jobs without one are skipped.
-Dry-run mode logs payloads without submitting them or advancing the checkpoint.
+(LastUpdateTime, JobID), so a job whose EndExecTime is older than the checkpoint is
+still reported. EndExecTime is only reported; final-state jobs without one are
+skipped. Dry-run mode logs payloads without submitting them or advancing the
+checkpoint.
+
+LastUpdateTime has one-second resolution, so several jobs can share it and jobs can
+still appear in the current second. Only fully elapsed seconds are processed, and
+JobID breaks ties inside a second.
 
 Note: Payload fields are determined solely by the static source maps. New or
 renamed collector fields require updating those maps and redeploying the agent.
 
-Submission recovery: HTTP 202 advances the LastUpdateTime checkpoint. HTTP 401 and
-503 end the current batch. HTTP 422 stops the agent because the static payload was
-rejected. Same-timestamp siblings may be excluded in the next cycle after an
-earlier accepted sibling advances the checkpoint and a later sibling is rejected.
+Submission recovery: HTTP 202 advances the checkpoint to that job. HTTP 401 and 503
+end the current batch; the failed job and later ones are retried next cycle, earlier
+ones are not resent. HTTP 422 on a single job skips it (and checkpoints past it);
+a second 422 before any 202 stops the agent because the static payload is
+presumably wrong.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -66,6 +72,8 @@ TIMESTAMP_FIELDS = frozenset({"SubmissionTime", "StartExecTime", "EndExecTime"})
 class GreenDigitAgent(AgentModule):
     """Periodically report completed DIRAC jobs to the GreenDigit collector."""
 
+    rejected_in_a_row = 0
+
     def initialize(self):
         """Initialize agent state and configuration."""
         self.collector_base_url = self.am_getOption(
@@ -85,7 +93,7 @@ class GreenDigitAgent(AgentModule):
             self.log.error(message)
             return S_ERROR(message)
         self.timestamp_file = os.path.join(
-            self.am_getWorkDirectory(), "green_digit_last_end_time"
+            self.am_getWorkDirectory(), "green_digit_checkpoint"
         )
         self.job_monitoring_client = JobMonitoringClient()
         self.log.info(
@@ -209,23 +217,26 @@ class GreenDigitAgent(AgentModule):
         return value
 
     def _read_checkpoint(self, now):
+        """Return the (LastUpdateTime, JobID) of the last accepted job."""
         try:
             with open(self.timestamp_file, encoding="ascii") as checkpoint:
-                return self._parse_timestamp(checkpoint.read().strip())
+                timestamp, job_id = checkpoint.read().split()
+            return self._parse_timestamp(timestamp), int(job_id)
         except FileNotFoundError:
-            return now - timedelta(minutes=15)
+            # Whole seconds like LastUpdateTime; JobID 0 sorts before every real job.
+            return now.replace(microsecond=0) - timedelta(minutes=15), 0
         except (OSError, ValueError) as error:
-            return S_ERROR("Could not read GreenDigit timestamp: %s" % error)
+            return S_ERROR("Could not read GreenDigit checkpoint: %s" % error)
 
-    def _write_checkpoint(self, last_update_time):
+    def _write_checkpoint(self, last_update_time, job_id):
         try:
             os.makedirs(os.path.dirname(self.timestamp_file), exist_ok=True)
             temporary_file = "%s.tmp" % self.timestamp_file
             with open(temporary_file, "w", encoding="ascii") as checkpoint:
-                checkpoint.write(last_update_time.isoformat() + "Z\n")
+                checkpoint.write("%sZ %d\n" % (last_update_time.isoformat(), job_id))
             os.replace(temporary_file, self.timestamp_file)
         except OSError as error:
-            return S_ERROR("Could not persist GreenDigit timestamp: %s" % error)
+            return S_ERROR("Could not persist GreenDigit checkpoint: %s" % error)
         return S_OK()
 
     def _post_job(self, payload):
@@ -263,11 +274,13 @@ class GreenDigitAgent(AgentModule):
             return result
         return S_OK(response.text)
 
-    def _report_completed_jobs(self, since, until):
-        """Fetch completed jobs in LastUpdateTime order and submit them individually."""
+    def _report_completed_jobs(self, checkpoint, until):
+        """Submit jobs after the (LastUpdateTime, JobID) checkpoint, oldest first."""
         job_result = self.job_monitoring_client.getJobs(
             {"Status": JobStatus.JOB_FINAL_STATES},
-            cutDate=since,
+            # Inclusive: jobs sharing the checkpoint second come back and are
+            # filtered below by JobID.
+            cutDate=checkpoint[0],
         )
         if not job_result["OK"]:
             return job_result
@@ -294,7 +307,17 @@ class GreenDigitAgent(AgentModule):
                     % (job_id, error)
                 )
                 continue
-            if not since < last_update_time <= until:
+            # Tuples compare LastUpdateTime first, then JobID: this drops what was
+            # already reported in the checkpoint second but keeps its later siblings.
+            # cutDate is inclusive, so the checkpoint job itself always comes back.
+            # It is the last job we already posted, so "<=" means "that one too".
+            # With a plain "<" it would look new and be posted again every cycle,
+            # until some newer job moves the checkpoint on.
+            # Precision: This is why we can't use a strict > on the time alone.
+            # Other jobs sharing the checkpoint second would be dropped.
+            # The JobID in the tuple separates them from the checkpoint job.
+            reported = (last_update_time, int(job_id)) <= checkpoint
+            if reported or last_update_time > until:
                 continue
             if attributes.get("EndExecTime") is None:
                 self.log.warn(
@@ -334,16 +357,27 @@ class GreenDigitAgent(AgentModule):
                 not submission_result["OK"]
                 and submission_result.get("StatusCode") == 422
             ):
+                self.rejected_in_a_row += 1
+                if self.rejected_in_a_row > 1:
+                    self.log.error(
+                        "Stopping GreenDigitAgent: collector rejected %s jobs in a row,"
+                        " last was job %s (client-side bug)"
+                        % (self.rejected_in_a_row, job_id)
+                    )
+                    self.am_createStopAgentFile()
+                    return submission_result
+                # An isolated 422 is likely bad data in this one job: skip it.
                 self.log.error(
-                    "Stopping GreenDigitAgent because collector rejected the payload"
-                    " (client-side bug)"
+                    "Skipping job %s rejected by the collector (HTTP 422)" % job_id
                 )
-                self.am_createStopAgentFile()
-            # 401 and 503 end this batch; only the last accepted timestamp is checkpointed.
-            if not submission_result["OK"]:
+            elif not submission_result["OK"]:
+                # 401 and 503 end this batch; the failed job and later ones are retried.
                 return submission_result
+            else:
+                # a subsequent success clears the agent'n stop request
+                self.rejected_in_a_row = 0
 
-            checkpoint_result = self._write_checkpoint(last_update_time)
+            checkpoint_result = self._write_checkpoint(last_update_time, job_id)
             if not checkpoint_result["OK"]:
                 return checkpoint_result
 
@@ -357,14 +391,24 @@ class GreenDigitAgent(AgentModule):
         )
         return S_OK()
 
+    @staticmethod
+    def _utcnow():
+        """Return the current UTC time as a naive datetime."""
+        return datetime.now(timezone.utc).replace(tzinfo=None)
+
     def execute(self):
         """Run one polling cycle."""
-        now = datetime.now(timezone.utc).replace(tzinfo=None)
-        since = self._read_checkpoint(now)
-        if isinstance(since, dict) and not since["OK"]:
-            return since
+        now = self._utcnow()
+        checkpoint = self._read_checkpoint(now)
+        if isinstance(checkpoint, dict) and not checkpoint["OK"]:
+            return checkpoint
+        # The "full second guard".
+        # Jobs can still get the current second as LastUpdateTime after we read
+        # the current batch, and checkpointing that second would then skip them.
+        # in the next cycle. Stop at the last full second.
+        until = now.replace(microsecond=0) - timedelta(seconds=1)
         self.log.info(
-            "LastUpdateTime window (UTC): (%s, %s]"
-            % (since.isoformat(), now.isoformat())
+            "LastUpdateTime window (UTC): after %s (JobID %s), up to %s"
+            % (checkpoint[0].isoformat(), checkpoint[1], until.isoformat())
         )
-        return self._report_completed_jobs(since, now)
+        return self._report_completed_jobs(checkpoint, until)
