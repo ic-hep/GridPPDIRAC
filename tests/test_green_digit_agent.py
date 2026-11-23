@@ -246,13 +246,21 @@ def test_build_payload_reports_invalid_value_for_timestamp_field():
 
 
 def test_report_completed_jobs_queries_and_checkpoints_each_accepted_job():
-    """Query through JobMonitoringClient and checkpoint accepted timestamps."""
+    """Query through JobMonitoringClient and checkpoint accepted update timestamps."""
     agent = GreenDigitAgent.__new__(GreenDigitAgent)
     agent.job_monitoring_client = Mock()
     agent.job_monitoring_client.getJobs.return_value = S_OK([11, 10])
     attributes = {
-        10: {"VO": "vo", "EndExecTime": datetime(2026, 11, 6, 14, 30)},
-        11: {"VO": "vo", "EndExecTime": datetime(2026, 11, 6, 14, 31)},
+        10: {
+            "VO": "vo",
+            "EndExecTime": datetime(2026, 11, 6, 14, 30),
+            "LastUpdateTime": datetime(2026, 11, 6, 14, 30),
+        },
+        11: {
+            "VO": "vo",
+            "EndExecTime": datetime(2026, 11, 6, 14, 31),
+            "LastUpdateTime": datetime(2026, 11, 6, 14, 31),
+        },
     }
     agent.job_monitoring_client.getJobsSummary.return_value = S_OK(attributes)
     agent.job_monitoring_client.getJobParameters.return_value = S_OK({10: {}, 11: {}})
@@ -280,15 +288,85 @@ def test_report_completed_jobs_queries_and_checkpoints_each_accepted_job():
     ]
 
 
-def test_report_completed_jobs_skips_missing_end_exec_time_and_continues():
-    """Skip final jobs without an execution end time without blocking others."""
+def test_report_completed_jobs_includes_early_end_time_after_later_update():
+    """Include a job whose EndExecTime is older than the LastUpdateTime checkpoint."""
+    agent = GreenDigitAgent.__new__(GreenDigitAgent)
+    agent.job_monitoring_client = Mock()
+    agent.job_monitoring_client.getJobs.return_value = S_OK([10])
+    agent.job_monitoring_client.getJobsSummary.return_value = S_OK(
+        {
+            10: {
+                "EndExecTime": datetime(2026, 11, 6, 14, 30),
+                "LastUpdateTime": datetime(2026, 11, 6, 14, 40),
+            }
+        }
+    )
+    agent.job_monitoring_client.getJobParameters.return_value = S_OK({10: {}})
+    agent.dry_run = False
+    agent.log = Mock()
+    agent._post_job = Mock(return_value=S_OK("accepted"))
+    agent._write_checkpoint = Mock(return_value=S_OK())
+
+    result = agent._report_completed_jobs(
+        datetime(2026, 11, 6, 14, 35),
+        datetime(2026, 11, 6, 15, 0),
+    )
+
+    assert result["OK"]
+    agent._post_job.assert_called_once()
+    posted_payload = agent._post_job.call_args.args[0]
+    assert posted_payload["job_attributes"]["EndExecTime"] == "2026-11-06T14:30:00Z"
+    agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 40))
+
+
+def test_report_completed_jobs_skips_invalid_last_update_time_and_continues():
+    """Skip an unparseable LastUpdateTime while continuing with valid jobs."""
     agent = GreenDigitAgent.__new__(GreenDigitAgent)
     agent.job_monitoring_client = Mock()
     agent.job_monitoring_client.getJobs.return_value = S_OK([10, 11])
     agent.job_monitoring_client.getJobsSummary.return_value = S_OK(
         {
-            10: {"Status": "Killed", "EndExecTime": None},
-            11: {"Status": "Done", "EndExecTime": datetime(2026, 11, 6, 14, 31)},
+            10: {"Status": "Done", "LastUpdateTime": "not-a-date"},
+            11: {
+                "Status": "Done",
+                "EndExecTime": datetime(2026, 11, 6, 14, 30),
+                "LastUpdateTime": datetime(2026, 11, 6, 14, 31),
+            },
+        }
+    )
+    agent.job_monitoring_client.getJobParameters.return_value = S_OK({11: {}})
+    agent.dry_run = False
+    agent.log = Mock()
+    agent._post_job = Mock(return_value=S_OK("accepted"))
+    agent._write_checkpoint = Mock(return_value=S_OK())
+
+    result = agent._report_completed_jobs(datetime(2026, 11, 6), datetime(2026, 11, 7))
+
+    assert result["OK"]
+    warning = agent.log.warn.call_args.args[0]
+    assert warning.startswith("Skipping final state job 10 with invalid LastUpdateTime:")
+    agent.job_monitoring_client.getJobParameters.assert_called_once_with([11])
+    agent._post_job.assert_called_once()
+    agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 31))
+
+
+def test_report_completed_jobs_skips_missing_end_exec_time_and_continues():
+    """Skip final jobs without EndExecTime without blocking others."""
+    agent = GreenDigitAgent.__new__(GreenDigitAgent)
+    agent.job_monitoring_client = Mock()
+    agent.job_monitoring_client.getJobs.return_value = S_OK([10, 11])
+    agent.job_monitoring_client.getJobsSummary.return_value = S_OK(
+        {
+            10: {
+                "Status": "Killed",
+                "EndExecTime": None,
+                "LastUpdateTime": datetime(2026, 11, 6, 14, 30),
+            },
+            11: {
+                "Status": "Done",
+                "EndExecTime": datetime(2026, 11, 6, 14, 29),
+                "LastUpdateTime": datetime(2026, 11, 6, 14, 31),
+            },
         }
     )
     agent.job_monitoring_client.getJobParameters.return_value = S_OK({11: {}})
@@ -308,33 +386,6 @@ def test_report_completed_jobs_skips_missing_end_exec_time_and_continues():
     agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 31))
 
 
-def test_report_completed_jobs_skips_invalid_end_exec_time_and_continues():
-    """Skip an unparseable timestamp while continuing with valid jobs."""
-    agent = GreenDigitAgent.__new__(GreenDigitAgent)
-    agent.job_monitoring_client = Mock()
-    agent.job_monitoring_client.getJobs.return_value = S_OK([10, 11])
-    agent.job_monitoring_client.getJobsSummary.return_value = S_OK(
-        {
-            10: {"Status": "Done", "EndExecTime": "not-a-date"},
-            11: {"Status": "Done", "EndExecTime": datetime(2026, 11, 6, 14, 31)},
-        }
-    )
-    agent.job_monitoring_client.getJobParameters.return_value = S_OK({11: {}})
-    agent.dry_run = False
-    agent.log = Mock()
-    agent._post_job = Mock(return_value=S_OK("accepted"))
-    agent._write_checkpoint = Mock(return_value=S_OK())
-
-    result = agent._report_completed_jobs(datetime(2026, 11, 6), datetime(2026, 11, 7))
-
-    assert result["OK"]
-    warning = agent.log.warn.call_args.args[0]
-    assert warning.startswith("Skipping final state job 10 with invalid EndExecTime:")
-    agent.job_monitoring_client.getJobParameters.assert_called_once_with([11])
-    agent._post_job.assert_called_once()
-    agent._write_checkpoint.assert_called_once_with(datetime(2026, 11, 6, 14, 31))
-
-
 def test_report_completed_jobs_stops_without_checkpoint_after_failed_post():
     """Keep the cursor at the last accepted job when collector submission fails."""
     agent = GreenDigitAgent.__new__(GreenDigitAgent)
@@ -342,8 +393,16 @@ def test_report_completed_jobs_stops_without_checkpoint_after_failed_post():
     agent.job_monitoring_client.getJobs.return_value = S_OK([10, 11])
     agent.job_monitoring_client.getJobsSummary.return_value = S_OK(
         {
-            10: {"VO": "vo", "EndExecTime": datetime(2026, 11, 6, 14, 30)},
-            11: {"VO": "vo", "EndExecTime": datetime(2026, 11, 6, 14, 31)},
+            10: {
+                "VO": "vo",
+                "EndExecTime": datetime(2026, 11, 6, 14, 29),
+                "LastUpdateTime": datetime(2026, 11, 6, 14, 30),
+            },
+            11: {
+                "VO": "vo",
+                "EndExecTime": datetime(2026, 11, 6, 14, 30),
+                "LastUpdateTime": datetime(2026, 11, 6, 14, 31),
+            },
         }
     )
     agent.job_monitoring_client.getJobParameters.return_value = S_OK({10: {}, 11: {}})
@@ -366,7 +425,12 @@ def test_report_completed_jobs_retries_after_collector_503():
     agent.job_monitoring_client = Mock()
     agent.job_monitoring_client.getJobs.return_value = S_OK([10])
     agent.job_monitoring_client.getJobsSummary.return_value = S_OK(
-        {10: {"EndExecTime": datetime(2026, 11, 6, 14, 30)}}
+        {
+            10: {
+                "EndExecTime": datetime(2026, 11, 6, 14, 29),
+                "LastUpdateTime": datetime(2026, 11, 6, 14, 30),
+            }
+        }
     )
     agent.job_monitoring_client.getJobParameters.return_value = S_OK({10: {}})
     agent.collector_api_key = "test-api-key"
@@ -403,8 +467,14 @@ def test_report_completed_jobs_skips_same_timestamp_siblings_after_401():
     agent.job_monitoring_client.getJobs.return_value = S_OK([10, 11])
     agent.job_monitoring_client.getJobsSummary.return_value = S_OK(
         {
-            10: {"EndExecTime": datetime(2026, 11, 6, 14, 30)},
-            11: {"EndExecTime": datetime(2026, 11, 6, 14, 30)},
+            10: {
+                "EndExecTime": datetime(2026, 11, 6, 14, 29),
+                "LastUpdateTime": datetime(2026, 11, 6, 14, 30),
+            },
+            11: {
+                "EndExecTime": datetime(2026, 11, 6, 14, 29),
+                "LastUpdateTime": datetime(2026, 11, 6, 14, 30),
+            },
         }
     )
     agent.job_monitoring_client.getJobParameters.return_value = S_OK({10: {}, 11: {}})
@@ -446,7 +516,12 @@ def test_report_completed_jobs_stops_on_422_without_refresh_or_retry():
     agent.job_monitoring_client = Mock()
     agent.job_monitoring_client.getJobs.return_value = S_OK([10])
     agent.job_monitoring_client.getJobsSummary.return_value = S_OK(
-        {10: {"EndExecTime": datetime(2026, 11, 6, 14, 30)}}
+        {
+            10: {
+                "EndExecTime": datetime(2026, 11, 6, 14, 29),
+                "LastUpdateTime": datetime(2026, 11, 6, 14, 30),
+            }
+        }
     )
     agent.job_monitoring_client.getJobParameters.return_value = S_OK({10: {}})
     agent.collector_api_key = "test-api-key"
@@ -476,7 +551,12 @@ def test_report_completed_jobs_dry_run_logs_payload_without_post_or_checkpoint()
     agent.job_monitoring_client = Mock()
     agent.job_monitoring_client.getJobs.return_value = S_OK([10])
     agent.job_monitoring_client.getJobsSummary.return_value = S_OK(
-        {10: {"EndExecTime": datetime(2026, 11, 6, 14, 30)}}
+        {
+            10: {
+                "EndExecTime": datetime(2026, 11, 6, 14, 30),
+                "LastUpdateTime": datetime(2026, 11, 6, 14, 30),
+            }
+        }
     )
     agent.job_monitoring_client.getJobParameters.return_value = S_OK({10: {"HostName": "worker"}})
     agent.dry_run = True
@@ -501,7 +581,12 @@ def test_report_completed_jobs_live_mode_logs_payload_before_post():
     agent.job_monitoring_client = Mock()
     agent.job_monitoring_client.getJobs.return_value = S_OK([10])
     agent.job_monitoring_client.getJobsSummary.return_value = S_OK(
-        {10: {"EndExecTime": datetime(2026, 11, 6, 14, 30)}}
+        {
+            10: {
+                "EndExecTime": datetime(2026, 11, 6, 14, 29),
+                "LastUpdateTime": datetime(2026, 11, 6, 14, 30),
+            }
+        }
     )
     agent.job_monitoring_client.getJobParameters.return_value = S_OK({10: {"HostName": "worker"}})
     agent.dry_run = False

@@ -1,17 +1,18 @@
 """Report completed DIRAC jobs to the GreenDigit collector.
 
-Jobs and their data are read through JobMonitoringClient, filtered by EndExecTime,
-and mapped to the collector's accepted fields. Dry-run mode logs payloads without
-submitting them or advancing the checkpoint.
+Jobs and their data are read through JobMonitoringClient and mapped to the
+collector's accepted fields. Jobs are selected, ordered and checkpointed by
+LastUpdateTime, so a job whose EndExecTime is older than the checkpoint is still
+reported. EndExecTime is only reported; final-state jobs without one are skipped.
+Dry-run mode logs payloads without submitting them or advancing the checkpoint.
 
 Note: Payload fields are determined solely by the static source maps. New or
 renamed collector fields require updating those maps and redeploying the agent.
 
-Submission recovery: HTTP 202 advances the timestamp checkpoint. HTTP 401 and 503
-end the current batch. HTTP 422 stops the agent because the static payload was
+Submission recovery: HTTP 202 advances the LastUpdateTime checkpoint. HTTP 401 and
+503 end the current batch. HTTP 422 stops the agent because the static payload was
 rejected. Same-timestamp siblings may be excluded in the next cycle after an
-earlier accepted sibling advances the timestamp checkpoint and a later sibling
-is rejected.
+earlier accepted sibling advances the checkpoint and a later sibling is rejected.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -202,7 +203,7 @@ class GreenDigitAgent(AgentModule):
         if isinstance(value, str):
             value = datetime.fromisoformat(value.replace("Z", "+00:00"))
         if not isinstance(value, datetime):
-            raise ValueError("EndExecTime is not a datetime")
+            raise ValueError("Timestamp is not a datetime")
         if value.tzinfo is not None:
             value = value.astimezone(timezone.utc).replace(tzinfo=None)
         return value
@@ -216,12 +217,12 @@ class GreenDigitAgent(AgentModule):
         except (OSError, ValueError) as error:
             return S_ERROR("Could not read GreenDigit timestamp: %s" % error)
 
-    def _write_checkpoint(self, end_exec_time):
+    def _write_checkpoint(self, last_update_time):
         try:
             os.makedirs(os.path.dirname(self.timestamp_file), exist_ok=True)
             temporary_file = "%s.tmp" % self.timestamp_file
             with open(temporary_file, "w", encoding="ascii") as checkpoint:
-                checkpoint.write(end_exec_time.isoformat() + "Z\n")
+                checkpoint.write(last_update_time.isoformat() + "Z\n")
             os.replace(temporary_file, self.timestamp_file)
         except OSError as error:
             return S_ERROR("Could not persist GreenDigit timestamp: %s" % error)
@@ -263,7 +264,7 @@ class GreenDigitAgent(AgentModule):
         return S_OK(response.text)
 
     def _report_completed_jobs(self, since, until):
-        """Fetch completed jobs in timestamp order and submit them individually."""
+        """Fetch completed jobs in LastUpdateTime order and submit them individually."""
         job_result = self.job_monitoring_client.getJobs(
             {"Status": JobStatus.JOB_FINAL_STATES},
             cutDate=since,
@@ -283,25 +284,27 @@ class GreenDigitAgent(AgentModule):
         jobs_to_report = []
         for job_id in job_ids:
             attributes = attributes_by_job.get(int(job_id), {})
-            end_exec_time_value = attributes.get("EndExecTime")
-            if end_exec_time_value is None:
+            try:
+                last_update_time = self._parse_timestamp(
+                    attributes.get("LastUpdateTime")
+                )
+            except (TypeError, ValueError) as error:
+                self.log.warn(
+                    "Skipping final state job %s with invalid LastUpdateTime: %s"
+                    % (job_id, error)
+                )
+                continue
+            if not since < last_update_time <= until:
+                continue
+            if attributes.get("EndExecTime") is None:
                 self.log.warn(
                     "Skipping final state job %s with no EndExecTime (status=%s)"
                     % (job_id, attributes.get("Status", "unknown"))
                 )
                 continue
-            try:
-                end_exec_time = self._parse_timestamp(end_exec_time_value)
-            except (TypeError, ValueError) as error:
-                self.log.warn(
-                    "Skipping final state job %s with invalid EndExecTime: %s"
-                    % (job_id, error)
-                )
-                continue
-            if since < end_exec_time <= until:
-                jobs_to_report.append((end_exec_time, int(job_id), attributes))
+            jobs_to_report.append((last_update_time, int(job_id), attributes))
         jobs_to_report.sort(key=lambda job: (job[0], job[1]))
-        self.log.info("Jobs in EndExecTime window: %s" % len(jobs_to_report))
+        self.log.info("Jobs in LastUpdateTime window: %s" % len(jobs_to_report))
         if not jobs_to_report:
             return S_OK()
 
@@ -311,7 +314,7 @@ class GreenDigitAgent(AgentModule):
             return parameter_result
         parameters_by_job = parameter_result["Value"]
 
-        for end_exec_time, job_id, attributes in jobs_to_report:
+        for last_update_time, job_id, attributes in jobs_to_report:
             parameters = parameters_by_job.get(int(job_id), {})
             payload_result = self.build_payload(job_id, attributes, parameters)
             if not payload_result["OK"]:
@@ -340,7 +343,7 @@ class GreenDigitAgent(AgentModule):
             if not submission_result["OK"]:
                 return submission_result
 
-            checkpoint_result = self._write_checkpoint(end_exec_time)
+            checkpoint_result = self._write_checkpoint(last_update_time)
             if not checkpoint_result["OK"]:
                 return checkpoint_result
 
@@ -361,6 +364,7 @@ class GreenDigitAgent(AgentModule):
         if isinstance(since, dict) and not since["OK"]:
             return since
         self.log.info(
-            "EndExecTime window (UTC): (%s, %s]" % (since.isoformat(), now.isoformat())
+            "LastUpdateTime window (UTC): (%s, %s]"
+            % (since.isoformat(), now.isoformat())
         )
         return self._report_completed_jobs(since, now)
