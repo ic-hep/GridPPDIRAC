@@ -404,8 +404,8 @@ class GreenDigitAgent(AgentModule):
             return checkpoint
         # The "full second guard".
         # Jobs can still get the current second as LastUpdateTime after we read
-        # the current batch, and checkpointing that second would then skip them.
-        # in the next cycle. Stop at the last full second.
+        # it; checkpointing them in the current cycle would skip the late ones.
+        # Stop at the last full second; the rest is picked up next cycle.
         until = now.replace(microsecond=0) - timedelta(seconds=1)
         self.log.info(
             "LastUpdateTime window (UTC): after %s (JobID %s), up to %s"
